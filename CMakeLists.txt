@@ -21,8 +21,8 @@ set(__ARCH "x64")
 set(GLEW_USE_STATIC_LIBS TRUE)
 # set(GLEW_VERBOSE TRUE)
 
-set(CMAKE_PREFIX_PATH "../../../Goodies/glew-2.2.0")
-set(CMAKE_LIBRARY_PATH "../../../Goodies/glew-2.2.0/lib/Release/x64")
+set(CMAKE_PREFIX_PATH "../Goodies/glew-2.2.0")
+set(CMAKE_LIBRARY_PATH "../Goodies/glew-2.2.0/lib/Release/x64")
 
 find_package(GLEW REQUIRED)
 
@@ -32,7 +32,7 @@ link_libraries(${GLEW_STATIC_LIBRARIES})
 
 # FreeGLUT
 
-set(GLUT_INCLUDE_DIR "../../../Goodies/freeglut-3.2.2/include")
+set(GLUT_INCLUDE_DIR "../Goodies/freeglut-3.2.2/include")
 set(GLUT_LIBRARIES "optimized;C:/Users/davemc/source/repos/Goodies/freeglut-3.2.2/lib/Release/freeglut_static.lib;debug;C:/Users/davemc/source/repos/Goodies/freeglut-3.2.2/lib/Debug/freeglut_staticd.lib")
 
 add_definitions(-DFREEGLUT_STATIC)
@@ -45,7 +45,7 @@ set(SOURCES
 
 source_group("src"  FILES ${SOURCES})
 
-add_subdirectory(${PROJECT_ROOT_DIR}/../../../DMcTools ${CMAKE_CURRENT_BINARY_DIR}/DMcTools)
+add_subdirectory(${PROJECT_ROOT_DIR}/../DMcTools ${CMAKE_CURRENT_BINARY_DIR}/DMcTools)
 
 add_executable(${EXE_NAME} ${SOURCES})
 
