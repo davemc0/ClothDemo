@@ -12,15 +12,13 @@
 #include "GL/freeglut.h"
 #include "Math/Vector.h"
 
-// Globals
-bool paused = true;
-bool wireMode = false;
-bool sphereMode = false;
-int WW = 512, WH = 512;
+// User Interface Globals
+bool paused = false, fullScreen = false;
+int WW = 512, WH = 512, constraintIters = 10;
 DrawMode drawMode = DRAW_TRIS;
 ClothStyle clothStyle = TABLECLOTH;
+CollisionObjects collisionObjects = COLLIDE_SPHERES;
 Cloth* pCloth;
-int CallingDefaultMouseFuncsOn = 1;
 
 void userReshapeFunc0(int w, int h)
 {
@@ -29,10 +27,10 @@ void userReshapeFunc0(int w, int h)
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
 
-    float Yfov = 45;              // VERTICAL FIELD OF VIEW IN DEGREES
-    float Aspect = w / double(h); // WIDTH OVER HEIGHT
-    float Near = 0.1f;            // NEAR PLANE DISTANCE
-    float Far = 1000.0f;          // FAR PLANE DISTANCE
+    float Yfov = 45;             // VERTICAL FIELD OF VIEW IN DEGREES
+    float Aspect = w / float(h); // WIDTH OVER HEIGHT
+    float Near = 0.1f;           // NEAR PLANE DISTANCE
+    float Far = 1000.0f;         // FAR PLANE DISTANCE
 
     gluPerspective(Yfov, Aspect, Near, Far);
 }
@@ -99,6 +97,27 @@ void userKeyboardFunc0(unsigned char Key, int x, int y)
         paused = !paused;
         std::cerr << "paused: " << paused << '\n';
         break;
+    case 'f':
+        fullScreen = !fullScreen;
+        if (fullScreen) {
+            glutFullScreen();
+        } else {
+            glutReshapeWindow(WW, WH);
+            glutPositionWindow(0, 0);
+        }
+        break;
+    case '+':
+    case '=':
+        constraintIters++;
+        std::cerr << "constraintIters: " << constraintIters << '\n';
+        pCloth->SetConstraintIters(constraintIters);
+        break;
+    case '-':
+    case '_':
+        constraintIters = max(constraintIters - 1, 0);
+        std::cerr << "constraintIters: " << constraintIters << '\n';
+        pCloth->SetConstraintIters(constraintIters);
+        break;
     case 'c':
         clothStyle = static_cast<ClothStyle>((clothStyle + 1) % NUM_CLOTH_STYLES);
         std::cerr << "clothStyle: " << clothStyle << '\n';
@@ -113,8 +132,9 @@ void userKeyboardFunc0(unsigned char Key, int x, int y)
         break;
     case 's': pCloth->WriteTriModel("tablecloth.tri"); break;
     case 'm':
-        sphereMode = !sphereMode;
-        pCloth->SetCollideMode(sphereMode);
+        collisionObjects = static_cast<CollisionObjects>((collisionObjects + 1) % NUM_COLLISION_OBJECTS);
+        std::cerr << "collisionObjects: " << collisionObjects << '\n';
+        pCloth->SetCollideObjectType(collisionObjects);
         break;
     case 'q':
     case '\033': /* ESC key: quit */ exit(0); break;
@@ -127,19 +147,19 @@ void userSpecialKeyFunc0(int Key, int x, int y)
     int mod = glutGetModifiers();
 
     switch (Key) {
-    case GLUT_KEY_LEFT: pCloth->MoveSpheres(f3vec(-dx, 0, 0)); break;
-    case GLUT_KEY_RIGHT: pCloth->MoveSpheres(f3vec(dx, 0, 0)); break;
+    case GLUT_KEY_LEFT: pCloth->MoveColliders(f3vec(-dx, 0, 0)); break;
+    case GLUT_KEY_RIGHT: pCloth->MoveColliders(f3vec(dx, 0, 0)); break;
     case GLUT_KEY_UP:
         if (mod == GLUT_ACTIVE_CTRL)
-            pCloth->MoveSpheres(f3vec(0, dx, 0));
+            pCloth->MoveColliders(f3vec(0, dx, 0));
         else
-            pCloth->MoveSpheres(f3vec(0, 0, dx));
+            pCloth->MoveColliders(f3vec(0, 0, -dx));
         break;
     case GLUT_KEY_DOWN:
         if (mod == GLUT_ACTIVE_CTRL)
-            pCloth->MoveSpheres(f3vec(0, -dx, 0));
+            pCloth->MoveColliders(f3vec(0, -dx, 0));
         else
-            pCloth->MoveSpheres(f3vec(0, 0, -dx));
+            pCloth->MoveColliders(f3vec(0, 0, dx));
         break;
     }
 }
@@ -166,12 +186,14 @@ int main(int argc, char** argv)
 
     // Create cloth with starting point = P, timestep DT
     f3vec startPos(0, 25, 0);
-    double dt = 0.03;
+    float dt = 0.03f;
     float damping = 0.9f;
-    pCloth = new Cloth(190, 190, 0.25f, 0.25f, startPos, dt, damping, clothStyle);
-    // pCloth = new Cloth(90, 90, 0.5f, 0.5f, startPos, dt, damping, clothStyle);
+    // pCloth = new Cloth(200, 200, 0.25f, 0.25f, startPos, dt, damping, clothStyle);
+    pCloth = new Cloth(100, 100, 0.5f, 0.5f, startPos, dt, damping, clothStyle);
+    pCloth->SetCollideObjectType(collisionObjects);
+    pCloth->SetConstraintIters(constraintIters);
 
-    GLfloat lightPos[] = {2.0, 0.0, 5.0, 0.0};
+    GLfloat lightPos[] = {2.0, 30.0, 5.0, 1.0};
 
     glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
 
