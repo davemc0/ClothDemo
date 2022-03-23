@@ -329,8 +329,6 @@ void Cloth::WriteTriModel(const char* FileName)
 {
     printf("Writing to %s (%d triangles). . .\n", FileName, m_numTris);
 
-    unsigned int HexColor;
-
     FILE* fp = fopen(FileName, "w");
     if (fp == NULL) {
         printf("ERROR: unable to open TriObj [%s]!\n", FileName);
@@ -344,8 +342,7 @@ void Cloth::WriteTriModel(const char* FileName)
         fprintf(fp, "%f %f %f ", b.x, b.y, b.z);
         fprintf(fp, "%f %f %f ", c.x, c.y, c.z);
 
-        HexColor = (((unsigned int)255) << 16) + (((unsigned int)255) << 8) + ((unsigned int)255);
-        fprintf(fp, "%x\n", HexColor);
+        fprintf(fp, "ffffff\n");
     }
     fclose(fp);
 }
