@@ -11,6 +11,8 @@
 // This needs to come after GLEW
 #include "GL/freeglut.h"
 
+#include <execution>
+
 Cloth::Cloth() { Cloth(40, 40, 1.0f, 1.0f, f3vec(0, 0, 0), .01f, 0.9f, TABLECLOTH); }
 
 Cloth::Cloth(int nx, int ny, float dx, float dy, const f3vec& clothCenter_, float timestep, float damping, ClothStyle clothStyle) :
@@ -21,11 +23,11 @@ Cloth::Cloth(int nx, int ny, float dx, float dy, const f3vec& clothCenter_, floa
     restDDiag = sqrt(dx * dx + dy * dy);
 
     // Create cloth node points and constraints
-    m_pos = new f3vec[m_numParticles];
-    m_oldPos = new f3vec[m_numParticles];
-    m_forceAcc = new f3vec[m_numParticles];
-    m_triInds = new int[m_numTris * 3];
-    m_texCoords = new f2vec[m_numParticles];
+    m_pos.resize(m_numParticles);
+    m_oldPos.resize(m_numParticles);
+    m_forceAcc.resize(m_numParticles);
+    m_triInds.resize(m_numTris * 3);
+    m_texCoords.resize(m_numParticles);
     Reset(clothStyle);
 
     // Create colliders
@@ -56,7 +58,7 @@ void Cloth::Reset(ClothStyle clothStyle)
         }
     }
 
-    // CREATE CONSTRAINTS or cloth will fall apart
+    // Constraints to hold the cloth together
     for (int j = 0; j < m_ny - 1; j++) {
         for (int i = 0; i < m_nx - 1; i++) {
             // Index points
@@ -67,71 +69,51 @@ void Cloth::Reset(ClothStyle clothStyle)
             f3vec* p2 = &m_pos[i + 1 + m_nx * j];
             f3vec* p3 = &m_pos[i + m_nx * (j + 1)];
             f3vec* p4 = &m_pos[i + 1 + m_nx * (j + 1)];
-            // Horizontal springs
-            Constraint* hC = new RodConstraint(p1, p2, m_restDX);
-            m_constraints.push_back(hC);
-
-            // Diagonal springs
-            Constraint* dC = new RodConstraint(p1, p4, restDDiag);
-            // XXX: What about a p2, p3 diagonal?
-            m_constraints.push_back(dC);
-
-            // Vertical springs
-            Constraint* vC = new RodConstraint(p1, p3, m_restDY);
-            m_constraints.push_back(vC);
+            m_constraints.push_back(new RodConstraint(p1, p2, m_restDX));  // Horizontal springs
+            m_constraints.push_back(new RodConstraint(p1, p4, restDDiag)); // Diagonal springs
+            m_constraints.push_back(new RodConstraint(p2, p3, restDDiag)); // Faster with only one diagonal but sags to the left
+            m_constraints.push_back(new RodConstraint(p1, p3, m_restDY));  // Vertical springs
         }
     }
     // Last row
     for (int i = 0; i < m_nx - 1; i++) {
         f3vec* p1 = &m_pos[i + m_nx * (m_ny - 1)];
         f3vec* p2 = &m_pos[i + 1 + m_nx * (m_ny - 1)];
-        Constraint* hC = new RodConstraint(p1, p2, m_restDX);
-        m_constraints.push_back(hC);
+        m_constraints.push_back(new RodConstraint(p1, p2, m_restDX));
     }
     // Last column
     for (int j = 0; j < m_ny - 1; j++) {
         f3vec* p1 = &m_pos[m_nx - 1 + j * m_nx];
         f3vec* p2 = &m_pos[m_nx - 1 + (j + 1) * m_nx];
-        Constraint* vC = new RodConstraint(p1, p2, m_restDY);
-        m_constraints.push_back(vC);
+        m_constraints.push_back(new RodConstraint(p1, p2, m_restDY));
     }
 
-    // CONSTRAINTS FOR CURTAIN-LIKE BEHAVIOR
+    // Constraints for curtain-like behavior
     if (clothStyle == CURTAIN || clothStyle == SLIDING_CURTAIN) {
         f3vec* p1;
-        Constraint* pC;
 
-#if 1
         // Fix two corner particles to their initial positions
         p1 = &m_pos[0];
-        pC = new PointConstraint(p1, *p1);
-        m_constraints.push_back(pC);
-
+        m_constraints.push_back(new PointConstraint(p1, *p1));
         p1 = &m_pos[m_nx - 1];
-        pC = new PointConstraint(p1, *p1);
-        m_constraints.push_back(pC);
-#endif
+        m_constraints.push_back(new PointConstraint(p1, *p1));
 
         // Constrain top of cloth to X axis
         for (int i = 1; i < m_nx; i++) {
             if (i % 4 == 0) {
                 p1 = &m_pos[i];
                 if (clothStyle == SLIDING_CURTAIN)
-                    pC = new SlideConstraint(p1, *p1, (ConstrainAxis)(CY_AXIS | CZ_AXIS));
+                    m_constraints.push_back(new SlideConstraint(p1, *p1, (ConstrainAxis)(CY_AXIS | CZ_AXIS)));
                 else
-                    pC = new PointConstraint(p1, *p1);
-                m_constraints.push_back(pC);
+                    m_constraints.push_back(new PointConstraint(p1, *p1));
             }
         }
     }
 
-    // Shuffle constraints
-    for (int i = m_constraints.size() - 1; i >= 0; i--) {
-        int j = LRand(i + 1);
-        std::swap(m_constraints[i], m_constraints[j]);
-    }
+    // Shuffle constraints by swapping each one with another random one
+    for (int i = 0; i < m_constraints.size(); i++) std::swap(m_constraints[i], m_constraints[LRand(m_constraints.size())]);
 
-    // Create triangles
+    // Create triangle indices for rendering
     int index = 0;
     for (int j = 0; j < m_ny - 1; j++) {
         for (int i = 0; i < m_nx - 1; i++) {
@@ -149,7 +131,9 @@ void Cloth::Reset(ClothStyle clothStyle)
 
 void Cloth::VerletIntegration()
 {
-    for (int i = 0; i < m_numParticles; i++) {
+    // Parallelizing this didn't really help. Remove par_unseq if not C++17.
+    std::for_each(std::execution::par_unseq, m_pos.begin(), m_pos.end(), [&](f3vec const& p) {
+        int i = &p - &m_pos[0];
         f3vec& x = m_pos[i];
         f3vec temp = x;
         f3vec& oldx = m_oldPos[i];
@@ -158,12 +142,12 @@ void Cloth::VerletIntegration()
         // Verlet integration: x - oldx is an approximation of velocity.
         x += (x - oldx) * m_damping + a * m_timeStep * m_timeStep;
         oldx = temp;
-    }
+    });
 }
 
 void Cloth::SatisfyConstraints()
 {
-    // Apply all the constraints several times per time step to try find a mutually satisfactory position for each particle
+    // Apply all the constraints several times per time step to try to find a mutually satisfactory position for each particle
     // More iterations makes the simulation much more accurate, such as making the cloth pleat properly.
     for (int j = 0; j < m_constraintItersPerTimeStep; j++) {
         if (m_collisionObj == COLLIDE_SPHERES)
@@ -171,10 +155,9 @@ void Cloth::SatisfyConstraints()
         else if (m_collisionObj == COLLIDE_BOXES)
             CollisionWithBoxes();
 
-        for (int i = 0; i < m_constraints.size(); i++) {
-            Constraint* c = m_constraints[i];
-            c->Apply();
-        }
+        // This parallelization has a race condition for Rod constraints, since multiple threads could touch the same particle at the same time,
+        // but in practice it just doesn't matter.
+        std::for_each(std::execution::par_unseq, m_constraints.begin(), m_constraints.end(), [&](Constraint* const& cc) { cc->Apply(); });
     }
 }
 
@@ -186,20 +169,23 @@ void Cloth::AccumulateForces()
 
 void Cloth::CollisionWithSpheres()
 {
-    // Collide with sphere with center m_spherePos, radius m_sphereRadii
+    // Collide each particle with each sphere
     for (int i = 0; i < m_numParticles; i++) {
-        for (int j = 0; j < m_numSpheres; j++) {
-            f3vec V = m_pos[i] - m_spherePos[j];
+        for (size_t j = 0; j < m_collisionSpheres.size(); j++) {
+            f3vec spherePos(m_collisionSpheres[j]);
+            float sphereRad = m_collisionSpheres[j].w;
+            f3vec V = m_pos[i] - spherePos;
             float lengthV = V.length();
 
             // If the particle is inside the sphere push it to the nearest point outside the sphere
-            if (lengthV < m_sphereRadii[j]) m_pos[i] = m_spherePos[j] + V * (m_sphereRadii[j] / lengthV);
+            if (lengthV < sphereRad) m_pos[i] = spherePos + V * (sphereRad / lengthV);
         }
     }
 }
 
 void Cloth::CollisionWithBoxes()
 {
+    // Collide each particle with each AABB
     for (int i = 0; i < m_numParticles; i++) {
         for (size_t j = 0; j < m_collisionBoxes.size(); j++) {
             // If the particle is inside the box push it to the nearest point outside the box
@@ -213,15 +199,10 @@ void Cloth::SetConstraintIters(int iters) { m_constraintItersPerTimeStep = iters
 
 void Cloth::CreateSpheres()
 {
-    m_numSpheres = 3;
-    m_spherePos = new f3vec[m_numSpheres];
-    m_sphereRadii = new float[m_numSpheres];
-    m_spherePos[0] = f3vec(-7.5, 0, 0);
-    m_sphereRadii[0] = 10.0;
-    m_spherePos[1] = f3vec(7.5, 0, 0);
-    m_sphereRadii[1] = 10.0;
-    m_spherePos[2] = f3vec(7.5, 0, 15);
-    m_sphereRadii[2] = 10.0;
+    m_collisionSpheres.resize(3);
+    m_collisionSpheres[0] = f4vec(-5, 0, -4, 10.f);
+    m_collisionSpheres[1] = f4vec(5, 0, -4, 10.f);
+    m_collisionSpheres[2] = f4vec(0, 0, 5, 10.f);
 }
 
 void Cloth::CreateBoxes()
@@ -236,7 +217,7 @@ void Cloth::CreateBoxes()
 void Cloth::MoveColliders(const f3vec& delta)
 {
     if (m_collisionObj == COLLIDE_SPHERES)
-        for (int i = 0; i < m_numSpheres; i++) { m_spherePos[i] += delta; }
+        for (int i = 0; i < m_collisionSpheres.size(); i++) { m_collisionSpheres[i] = f4vec(f3vec(m_collisionSpheres[i]) + delta, m_collisionSpheres[i].w); }
     else if (m_collisionObj == COLLIDE_BOXES) {
         for (int i = 0; i < m_collisionBoxes.size(); i++) { m_collisionBoxes[i] = m_collisionBoxes[i] + delta; }
     }
@@ -245,6 +226,7 @@ void Cloth::MoveColliders(const f3vec& delta)
 // Add up forces, advance system, satisfy constraints
 void Cloth::TimeStep()
 {
+    // Cumulative times with no par_unseq: AccumulateForces: 0.0456733 VerletIntegration: 0.193743 SatisfyConstraints: 11.9977
     AccumulateForces();
     VerletIntegration();
     SatisfyConstraints();
@@ -252,8 +234,6 @@ void Cloth::TimeStep()
 
 void Cloth::Display(DrawMode drawMode)
 {
-    glEnable(GL_DEPTH_TEST);
-
     if (drawMode == DRAW_POINTS) {
         glPointSize(3.0);
         glColor3f(0, 1, 1);
@@ -261,8 +241,13 @@ void Cloth::Display(DrawMode drawMode)
         for (int i = 0; i < m_numParticles; i++) glVertex3fv(m_pos[i].getPtr());
         glEnd();
     } else if (drawMode == DRAW_LINES) {
-        glColor3f(1, 1, 0);
-        std::cerr << "Line mode not implemented\n";
+        glLineWidth(2.5f);
+        glColor3f(1, 1, 1);
+        for (int i = 0; i < m_nx - 1; i++) {
+            glBegin(GL_LINE_STRIP);
+            for (int j = 0; j < m_ny - 1; j++) { glVertex3fv(m_pos[i + m_nx * j].getPtr()); }
+            glEnd();
+        }
     } else if (drawMode == DRAW_TRIS) {
         glColor3f(1, 1, 1);
         glEnable(GL_LIGHT0);
@@ -293,13 +278,14 @@ void Cloth::Display(DrawMode drawMode)
     GL_ASSERT();
 
     // Draw collision objects
+    glLineWidth(1.5f);
     glColor3f(1, 0, 1);
     if (m_collisionObj == COLLIDE_SPHERES) {
         // Draw spheres
-        for (int i = 0; i < m_numSpheres; i++) {
+        for (int i = 0; i < m_collisionSpheres.size(); i++) {
             glPushMatrix();
-            glTranslatef(m_spherePos[i].x, m_spherePos[i].y, m_spherePos[i].z);
-            glutWireSphere(.99 * m_sphereRadii[i], 20, 20);
+            glTranslatef(m_collisionSpheres[i].x, m_collisionSpheres[i].y, m_collisionSpheres[i].z);
+            glutWireSphere(.99 * m_collisionSpheres[i].w, 20, 20);
             glPopMatrix();
         }
     } else if (m_collisionObj == COLLIDE_BOXES) {

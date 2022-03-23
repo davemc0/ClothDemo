@@ -31,39 +31,35 @@ private:
     void VerletIntegration();
     void SatisfyConstraints();
     void AccumulateForces();
+    void CreateSpheres();
+    void CollisionWithSpheres();
+    void CreateBoxes();
+    void CollisionWithBoxes();
 
     void ReadTexture(const char*);
 
     // Simulation data
-    int m_nx;                               // Grid points in x-dimension
-    int m_ny;                               // Grid points in y-dimension
-    int m_numParticles;                     // Number of total particles
-    float m_restDX, m_restDY, restDDiag;    // Resting length of particle-particle constraints
-    f3vec m_initClothCenter;                // Upper left hand corner of cloth
-    f3vec* m_pos;                           // Current particle positions
-    f3vec* m_oldPos;                        // Old positions
-    f3vec* m_forceAcc;                      // Force accumulators
-    std::vector<Constraint*> m_constraints; // Constraints
-    f3vec m_gravity = {0, -40, 0};          // Gravity
-    float m_damping;                        // Damping constant to improve stability
-    float m_timeStep;                       // Time step
-    int m_constraintItersPerTimeStep = 10;  // Iterating constraint satisfaction improves quality a lot
+    int m_nx;                                          // Grid points in x-dimension
+    int m_ny;                                          // Grid points in y-dimension
+    int m_numParticles;                                // Number of total particles
+    float m_restDX, m_restDY, restDDiag;               // Resting length of particle-particle constraints
+    f3vec m_initClothCenter;                           // Upper left hand corner of cloth
+    std::vector<f3vec> m_pos;                          // Current particle positions
+    std::vector<f3vec> m_oldPos;                       // Old positions
+    std::vector<f3vec> m_forceAcc;                     // Force accumulators
+    std::vector<Constraint*> m_constraints;            // Constraints
+    f3vec m_gravity = {0, -40, 0};                     // Gravity
+    float m_damping;                                   // Damping constant to improve stability
+    float m_timeStep;                                  // Time step
+    int m_constraintItersPerTimeStep = 10;             // Iterating constraint satisfaction improves quality a lot
+    CollisionObjects m_collisionObj = COLLIDE_SPHERES; // What kind of objects to collide against
+    std::vector<f4vec> m_collisionSpheres;             // List of spheres to collide against
+    std::vector<Aabb> m_collisionBoxes;                // List of boxes to collide against
 
     // Rendering data
-    int m_numTris;            // Number of triangles for rendering
-    int* m_triInds;           // Triangle indices for rendering
-    f2vec* m_texCoords;       // Texture coordinates
-    float m_texRepeats = 3.f; // Times the texture image repeats across the cloth
-    unsigned int m_texID;     // OpenGL texture ID
-
-    CollisionObjects m_collisionObj = COLLIDE_SPHERES;
-    void CreateSpheres();
-    void CollisionWithSpheres();
-    int m_numSpheres;
-    float* m_sphereRadii;
-    f3vec* m_spherePos;
-
-    void CreateBoxes();
-    void CollisionWithBoxes();
-    std::vector<Aabb> m_collisionBoxes;
+    int m_numTris;                  // Number of triangles for rendering
+    std::vector<int> m_triInds;     // Triangle indices for rendering
+    std::vector<f2vec> m_texCoords; // Texture coordinates
+    float m_texRepeats = 3.f;       // Times the texture image repeats across the cloth
+    unsigned int m_texID;           // OpenGL texture ID
 };

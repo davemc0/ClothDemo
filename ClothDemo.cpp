@@ -3,22 +3,24 @@
 // ---------------------------------------------------
 
 #include "Cloth.h"
+#include "Math/Vector.h"
 #include "Util/Assert.h"
+#include "Util/Timer.h"
 
 // OpenGL
 #include "GL/glew.h"
 
 // This needs to come after GLEW
 #include "GL/freeglut.h"
-#include "Math/Vector.h"
 
 // User Interface Globals
 bool paused = false, fullScreen = false;
-int WW = 512, WH = 512, constraintIters = 10;
+int WW = 1024, WH = 1024, constraintIters = 50; // If it runs slow reduce constraintIters first.
 DrawMode drawMode = DRAW_TRIS;
 ClothStyle clothStyle = TABLECLOTH;
 CollisionObjects collisionObjects = COLLIDE_SPHERES;
 Cloth* pCloth;
+Timer FrameRateTimer;
 
 void userReshapeFunc0(int w, int h)
 {
@@ -38,6 +40,13 @@ void userReshapeFunc0(int w, int h)
 // Display Function
 void userDisplayFunc0()
 {
+    static int frameCount = 0;
+    if (frameCount++ == 60) {
+        double time = frameCount / FrameRateTimer.Reset();
+        std::cerr << "Avg. frame rate: " << time << '\n';
+        frameCount = 0;
+    }
+
     // Set up view
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
@@ -175,6 +184,12 @@ int main(int argc, char** argv)
 
     glShadeModel(GL_SMOOTH);
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_LINE_SMOOTH);
+    glEnable(GL_POINT_SMOOTH);
+    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     glutDisplayFunc(userDisplayFunc0);
     glutIdleFunc(userIdleFunc0);
@@ -184,12 +199,14 @@ int main(int argc, char** argv)
     glutSpecialFunc(userSpecialKeyFunc0);
     glutReshapeFunc(userReshapeFunc0);
 
-    // Create cloth with starting point = P, timestep DT
-    f3vec startPos(0, 25, 0);
+    // Create cloth with these initial parameters
+    float clothWid = 60.f;
+    f3vec startPos(0, clothWid / 2, 0);
     float dt = 0.03f;
-    float damping = 0.9f;
-    // pCloth = new Cloth(200, 200, 0.25f, 0.25f, startPos, dt, damping, clothStyle);
-    pCloth = new Cloth(100, 100, 0.5f, 0.5f, startPos, dt, damping, clothStyle);
+    float damping = 0.95f;
+    int numPart1D = 110;
+    float partStep = clothWid / numPart1D;
+    pCloth = new Cloth(numPart1D, numPart1D, partStep, partStep, startPos, dt, damping, clothStyle);
     pCloth->SetCollideObjectType(collisionObjects);
     pCloth->SetConstraintIters(constraintIters);
 

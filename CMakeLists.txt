@@ -1,8 +1,8 @@
-# Cloth Solution
+# ClothDemo Solution
 
 cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
 
-set(EXE_NAME Cloth)
+set(EXE_NAME ClothDemo)
 
 project(${EXE_NAME})
 
@@ -40,7 +40,7 @@ include_directories(${GLUT_INCLUDE_DIR})
 link_libraries(${GLUT_LIBRARIES})
 
 set(SOURCES
-    Cloth.cpp Cloth.h Constraint.h DemoCloth.cpp
+    Cloth.cpp Cloth.h Constraint.h ClothDemo.cpp
 )
 
 source_group("src"  FILES ${SOURCES})

@@ -6,7 +6,7 @@ class Constraint {
 public:
     Constraint() {}
     ~Constraint() {}
-    virtual void Apply() = 0;
+    virtual void Apply() const = 0;
 };
 
 // Constrain particle to specific point
@@ -17,7 +17,7 @@ class PointConstraint : public Constraint {
 public:
     PointConstraint(f3vec* pa, const f3vec& fp) : m_pA(pa), m_fixedPos(fp) {}
     ~PointConstraint() {};
-    void Apply();
+    void Apply() const;
 };
 
 // Constrain two particles to a specific distance from each other
@@ -29,7 +29,7 @@ class RodConstraint : public Constraint {
 public:
     RodConstraint(f3vec* pa, f3vec* pb, float rl) : m_pA(pa), m_pB(pb), m_restLen(rl), m_restLenSqr(rl * rl) {}
     ~RodConstraint() {};
-    void Apply();
+    void Apply() const;
 };
 
 // Constrain particle in some axes but allow movement in others
@@ -42,12 +42,12 @@ class SlideConstraint : public Constraint {
 public:
     SlideConstraint(f3vec* pa, const f3vec& fp, ConstrainAxis axis) : m_pA(pa), m_fixedPos(fp), m_constrainAxis(axis) {}
     ~SlideConstraint() {};
-    void Apply();
+    void Apply() const;
 };
 
-inline void PointConstraint::Apply() { *m_pA = m_fixedPos; }
+inline void PointConstraint::Apply() const { *m_pA = m_fixedPos; }
 
-inline void RodConstraint::Apply()
+inline void RodConstraint::Apply() const
 {
     f3vec delta = *m_pB - *m_pA;
 #if 0
@@ -62,7 +62,7 @@ inline void RodConstraint::Apply()
     *m_pB -= delta;
 }
 
-inline void SlideConstraint::Apply()
+inline void SlideConstraint::Apply() const
 {
     if (m_constrainAxis & CX_AXIS) { (*m_pA)[0] = m_fixedPos[0]; }
     if (m_constrainAxis & CY_AXIS) { (*m_pA)[1] = m_fixedPos[1]; }
