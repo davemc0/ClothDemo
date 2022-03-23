@@ -17,6 +17,8 @@ bool paused = true;
 bool wireMode = false;
 bool sphereMode = false;
 int WW = 512, WH = 512;
+DrawMode drawMode = DRAW_TRIS;
+ClothStyle clothStyle = TABLECLOTH;
 Cloth* pCloth;
 int CallingDefaultMouseFuncsOn = 1;
 
@@ -49,14 +51,10 @@ void userDisplayFunc0()
     // glEnable(GL_LIGHTING);
     // glEnable(GL_LIGHT0);
     // glShadeModel(GL_SMOOTH);
-    glClearColor(0, 1, 0, 0);
+    glClearColor(0, 0, 0, 0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    glColor3f(1, 0, 1); // XXX
-    GL_ASSERT();
-    // pCloth->Display(DRAW_POINTS);
-    // pCloth->Display(DRAW_LINES);
-    pCloth->Display(DRAW_TRIS);
+    pCloth->Display(drawMode);
     GL_ASSERT();
 
     glutSwapBuffers();
@@ -94,9 +92,6 @@ void userMouseFunc0(int button, int state, int x, int y)
 
 void userMotionFunc0(int x, int y) { printf("%d %d\n", x, y); }
 
-//----------------------------------------------------------------------------
-// USER-PROVIDED KEYBOARD HANDLING ROUTINE
-//----------------------------------------------------------------------------
 void userKeyboardFunc0(unsigned char Key, int x, int y)
 {
     switch (Key) {
@@ -104,25 +99,25 @@ void userKeyboardFunc0(unsigned char Key, int x, int y)
         paused = !paused;
         std::cerr << "paused: " << paused << '\n';
         break;
+    case 'c':
+        clothStyle = static_cast<ClothStyle>((clothStyle + 1) % NUM_CLOTH_STYLES);
+        std::cerr << "clothStyle: " << clothStyle << '\n';
+        pCloth->Reset(clothStyle);
+        break;
     case 'r':
-        if (pCloth) pCloth->Reset();
+        if (pCloth) pCloth->Reset(clothStyle);
         break;
     case 'w':
-        if (wireMode) {
-            glPolygonMode(GL_FRONT, GL_FILL);
-            glPolygonMode(GL_BACK, GL_FILL);
-            wireMode = false;
-        } else {
-            glPolygonMode(GL_FRONT, GL_LINE);
-            glPolygonMode(GL_BACK, GL_LINE);
-            wireMode = true;
-        }
+        drawMode = static_cast<DrawMode>((drawMode + 1) % NUM_DRAW_MODES);
+        std::cerr << "drawMode: " << drawMode << '\n';
         break;
     case 's': pCloth->WriteTriModel("tablecloth.tri"); break;
     case 'm':
         sphereMode = !sphereMode;
         pCloth->SetCollideMode(sphereMode);
         break;
+    case 'q':
+    case '\033': /* ESC key: quit */ exit(0); break;
     };
 }
 
@@ -132,19 +127,19 @@ void userSpecialKeyFunc0(int Key, int x, int y)
     int mod = glutGetModifiers();
 
     switch (Key) {
-    case GLUT_KEY_LEFT: pCloth->MoveSphere(f3vec(-dx, 0, 0)); break;
-    case GLUT_KEY_RIGHT: pCloth->MoveSphere(f3vec(dx, 0, 0)); break;
+    case GLUT_KEY_LEFT: pCloth->MoveSpheres(f3vec(-dx, 0, 0)); break;
+    case GLUT_KEY_RIGHT: pCloth->MoveSpheres(f3vec(dx, 0, 0)); break;
     case GLUT_KEY_UP:
         if (mod == GLUT_ACTIVE_CTRL)
-            pCloth->MoveSphere(f3vec(0, dx, 0));
+            pCloth->MoveSpheres(f3vec(0, dx, 0));
         else
-            pCloth->MoveSphere(f3vec(0, 0, dx));
+            pCloth->MoveSpheres(f3vec(0, 0, dx));
         break;
     case GLUT_KEY_DOWN:
         if (mod == GLUT_ACTIVE_CTRL)
-            pCloth->MoveSphere(f3vec(0, -dx, 0));
+            pCloth->MoveSpheres(f3vec(0, -dx, 0));
         else
-            pCloth->MoveSphere(f3vec(0, 0, -dx));
+            pCloth->MoveSpheres(f3vec(0, 0, -dx));
         break;
     }
 }
@@ -158,8 +153,6 @@ int main(int argc, char** argv)
     glutInitWindowPosition(50, 50);
     glutCreateWindow("Cloth");
 
-    // glEnable(GL_LIGHTING);
-    // glEnable(GL_LIGHT0);
     glShadeModel(GL_SMOOTH);
     glEnable(GL_DEPTH_TEST);
 
@@ -172,11 +165,11 @@ int main(int argc, char** argv)
     glutReshapeFunc(userReshapeFunc0);
 
     // Create cloth with starting point = P, timestep DT
-    double dt = 0.03; //.03;
-    f3vec startPos(0, 10, 0);
-    pCloth = new Cloth(190, 190, 0.25f, 0.25f, startPos, dt, TABLECLOTH);
-    // pCloth = new Cloth(90, 90, 0.5f, 0.5f, startPos, dt, TABLECLOTH);
-    // pCloth = new Cloth(90, 90, 0.5f, 0.5f, startPos, dt, CURTAIN);
+    f3vec startPos(0, 25, 0);
+    double dt = 0.03;
+    float damping = 0.9f;
+    pCloth = new Cloth(190, 190, 0.25f, 0.25f, startPos, dt, damping, clothStyle);
+    // pCloth = new Cloth(90, 90, 0.5f, 0.5f, startPos, dt, damping, clothStyle);
 
     GLfloat lightPos[] = {2.0, 0.0, 5.0, 0.0};
 

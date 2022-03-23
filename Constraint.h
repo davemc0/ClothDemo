@@ -2,10 +2,6 @@
 
 #include "Math/Vector.h"
 
-enum ConstraintType { ROD_CONSTRAINT, POINT_CONSTRAINT };
-
-enum ConstrainAxis { CX_AXIS = 1, CY_AXIS = 2, CZ_AXIS = 4 };
-
 class Constraint {
 public:
     Constraint() {}
@@ -13,57 +9,62 @@ public:
     virtual void Apply() = 0;
 };
 
+// Constrain particle to specific point
 class PointConstraint : public Constraint {
+    f3vec* m_pA;
+    f3vec m_fixedPos;
+
 public:
-    PointConstraint() {};
+    PointConstraint(f3vec* pa, const f3vec& fp) : m_pA(pa), m_fixedPos(fp) {}
     ~PointConstraint() {};
-    PointConstraint(f3vec* pa, const f3vec& fp);
     void Apply();
-    f3vec* pA_;
-    f3vec fixedPos_;
 };
 
+// Constrain two particles to a specific distance from each other
 class RodConstraint : public Constraint {
+    f3vec *m_pA, *m_pB;
+    float m_restLen;
+    float m_restLenSqr;
+
 public:
-    RodConstraint() {};
+    RodConstraint(f3vec* pa, f3vec* pb, float rl) : m_pA(pa), m_pB(pb), m_restLen(rl), m_restLenSqr(rl * rl) {}
     ~RodConstraint() {};
-    RodConstraint(f3vec* pa, f3vec* pb, float rl);
     void Apply();
-    f3vec *pA_, *pB_; // Pointers to 2 particles connected by a rod
-    float restLength_;
-    float restLengthSquared_;
 };
 
+// Constrain particle in some axes but allow movement in others
+enum ConstrainAxis { CX_AXIS = 1, CY_AXIS = 2, CZ_AXIS = 4 };
 class SlideConstraint : public Constraint {
-public:
-    SlideConstraint() {};
-    ~SlideConstraint() {};
-    SlideConstraint(f3vec* pa, const f3vec& fp, int axis);
+    f3vec* m_pA;
+    f3vec m_fixedPos;
+    ConstrainAxis m_constrainAxis;
 
+public:
+    SlideConstraint(f3vec* pa, const f3vec& fp, ConstrainAxis axis) : m_pA(pa), m_fixedPos(fp), m_constrainAxis(axis) {}
+    ~SlideConstraint() {};
     void Apply();
-    f3vec* pA_;
-    f3vec fixedPos_;
-    int constrainAxis_;
 };
 
-// INLINE FUNCTIONS
-inline void PointConstraint::Apply() { *pA_ = fixedPos_; }
+inline void PointConstraint::Apply() { *m_pA = m_fixedPos; }
 
 inline void RodConstraint::Apply()
 {
-    f3vec delta = *pB_ - *pA_;
-    /*float deltalength = delta.Length();
-    float diff = (deltalength-restLength_)/deltalength;
-    *pA_ += delta*0.5*diff;
-    *pB_ -= delta*0.5*diff;*/
-    delta *= restLengthSquared_ / (delta * delta + restLengthSquared_) - 0.5f;
-    *pA_ -= delta;
-    *pB_ += delta;
+    f3vec delta = *m_pB - *m_pA;
+#if 0
+    float deltaLen = delta.length();
+    float halfDiff = 0.5f * (deltaLen - m_restLen) / deltaLen;
+#else
+    // Faster because no sqrt, but a bit less accurate
+    float halfDiff = -(m_restLenSqr / (dot(delta, delta) + m_restLenSqr) - 0.5f);
+#endif
+    delta *= halfDiff;
+    *m_pA += delta;
+    *m_pB -= delta;
 }
 
 inline void SlideConstraint::Apply()
 {
-    if (constrainAxis_ & CX_AXIS) { (*pA_)[0] = fixedPos_[0]; }
-    if (constrainAxis_ & CY_AXIS) { (*pA_)[1] = fixedPos_[1]; }
-    if (constrainAxis_ & CZ_AXIS) { (*pA_)[2] = fixedPos_[2]; }
+    if (m_constrainAxis & CX_AXIS) { (*m_pA)[0] = m_fixedPos[0]; }
+    if (m_constrainAxis & CY_AXIS) { (*m_pA)[1] = m_fixedPos[1]; }
+    if (m_constrainAxis & CZ_AXIS) { (*m_pA)[2] = m_fixedPos[2]; }
 }

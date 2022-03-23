@@ -1,8 +1,8 @@
 // Cloth.cpp
+
 #include "Cloth.h"
 
 #include "Image/tImage.h"
-#include "Math/AABB.h"
 #include "Math/Random.h"
 
 // OpenGL
@@ -11,59 +11,47 @@
 // This needs to come after GLEW
 #include "GL/freeglut.h"
 
-#include <cstdlib>
+Cloth::Cloth() { Cloth(40, 40, 1.0f, 1.0f, f3vec(0, 0, 0), .01f, 0.9f, TABLECLOTH); }
 
-// CONSTRUCTOR
-Cloth::Cloth() { Cloth(20, 20, 2.0f, 2.0f, f3vec(0, 0, 0), .01, TABLECLOTH); }
-
-Cloth::Cloth(int nx, int ny, float dx, float dy, const f3vec& startPos, double timestep, int style)
+Cloth::Cloth(int nx, int ny, float dx, float dy, const f3vec& clothCenter_, double timestep, float damping, ClothStyle clothStyle) :
+    m_nx(nx), m_ny(ny), m_restDX(dx), m_restDY(dy), m_initClothCenter(clothCenter_), m_timeStep(timestep), m_damping(damping)
 {
-    nX_ = nx;
-    nY_ = ny;
-    numParticles_ = nx * ny;
-    numTriangles_ = 2 * (nx - 1) * (ny - 1);
-    restDX_ = dx;
-    restDY_ = dy;
-    restDDiag_ = sqrt(dx * dx + dy * dy);
-    startPos_ = startPos;
-    timeStep_ = timestep;
-    clothStyle_ = style;
-    gravity_ = f3vec(0, -40, 0);
+    m_numParticles = nx * ny;
+    m_numTris = 2 * (nx - 1) * (ny - 1);
+    restDDiag = sqrt(dx * dx + dy * dy);
 
     // Create cloth node points and constraints
-    x_ = new f3vec[numParticles_];
-    oldx_ = new f3vec[numParticles_];
-    a_ = new f3vec[numParticles_];
-    triangles_ = new int[numTriangles_ * 3];
-    colors_ = new float[numParticles_ * 3];
-    texCoords_ = new float[numParticles_ * 2];
-    Reset();
+    m_pos = new f3vec[m_numParticles];
+    m_oldPos = new f3vec[m_numParticles];
+    m_forceAcc = new f3vec[m_numParticles];
+    m_triInds = new int[m_numTris * 3];
+    m_texCoords = new f2vec[m_numParticles];
+    Reset(clothStyle);
 
     // Create colliders
     CreateSpheres();
     CreateQuads();
-    isSphereMode_ = true;
+    m_collisionModeSpheres = true;
 
     // Read texture
-    ReadTexture("PlaidCloth.jpg");
+    ReadTexture("PatternCloth.jpg");
 }
 
-// DESTRUCTOR
 Cloth::~Cloth() {}
 
-void Cloth::SetCollideMode(bool isSphereMode) { isSphereMode_ = isSphereMode; }
+void Cloth::SetCollideMode(bool isSphereMode) { m_collisionModeSpheres = isSphereMode; }
 
 void Cloth::CreateSpheres()
 {
-    numSpheres_ = 3;
-    spherePos_ = new f3vec[numSpheres_];
-    sphereRadius_ = new float[numSpheres_];
-    spherePos_[0] = f3vec(-7.5, 0, 0);
-    sphereRadius_[0] = 10.0;
-    spherePos_[1] = f3vec(7.5, 0, 0);
-    sphereRadius_[1] = 10.0;
-    spherePos_[2] = f3vec(7.5, 0, 15);
-    sphereRadius_[2] = 10.0;
+    m_numSpheres = 3;
+    m_spherePos = new f3vec[m_numSpheres];
+    m_sphereRadii = new float[m_numSpheres];
+    m_spherePos[0] = f3vec(-7.5, 0, 0);
+    m_sphereRadii[0] = 10.0;
+    m_spherePos[1] = f3vec(7.5, 0, 0);
+    m_sphereRadii[1] = 10.0;
+    m_spherePos[2] = f3vec(7.5, 0, 15);
+    m_sphereRadii[2] = 10.0;
 }
 
 void Cloth::CreateQuads()
@@ -71,248 +59,213 @@ void Cloth::CreateQuads()
     float hx = 15.0f;
     float hz = 15.0f;
 
-    numQuads_ = 1;
-    collisionQuads_ = new CollisionQuad[1];
-    collisionQuads_[0].kNormal_ = f3vec(0, 1, 0);
-    collisionQuads_[0].kV_[0] = f3vec(-hx, 0, -hz);
-    collisionQuads_[0].kV_[1] = f3vec(hx, 0, -hz);
-    collisionQuads_[0].kV_[2] = f3vec(hx, 0, hz);
-    collisionQuads_[0].kV_[3] = f3vec(-hx, 0, hz);
+    m_numQuads = 1;
+    m_collisionQuads = new CollisionQuad[1];
+    m_collisionQuads[0].kNormal_ = f3vec(0, 1, 0);
+    m_collisionQuads[0].kV_[0] = f3vec(-hx, 0, -hz);
+    m_collisionQuads[0].kV_[1] = f3vec(hx, 0, -hz);
+    m_collisionQuads[0].kV_[2] = f3vec(hx, 0, hz);
+    m_collisionQuads[0].kV_[3] = f3vec(-hx, 0, hz);
 }
 
-void Cloth::MoveSphere(const f3vec& dx)
+void Cloth::MoveSpheres(const f3vec& dx)
 {
-    for (int i = 0; i < numSpheres_; i++) { spherePos_[i] += dx; }
+    for (int i = 0; i < m_numSpheres; i++) { m_spherePos[i] += dx; }
 }
 
 void Cloth::MoveQuads(const f3vec& dx)
 {
-    for (int i = 0; i < numQuads_; i++) {
-        collisionQuads_[i].kV_[0] += dx;
-        collisionQuads_[i].kV_[1] += dx;
-        collisionQuads_[i].kV_[2] += dx;
-        collisionQuads_[i].kV_[3] += dx;
+    for (int i = 0; i < m_numQuads; i++) {
+        m_collisionQuads[i].kV_[0] += dx;
+        m_collisionQuads[i].kV_[1] += dx;
+        m_collisionQuads[i].kV_[2] += dx;
+        m_collisionQuads[i].kV_[3] += dx;
     }
 }
 
-void Cloth::Reset()
+void Cloth::Reset(ClothStyle clothStyle)
 {
-    // Find width/height of cloth
-    double width = nX_ * restDX_;
-    double height = nY_ * restDY_;
-    f3vec offset(-width / 2.0, 10, -height / 2.0);
-    std::cerr << offset << '\n';
+    m_constraints.clear();
 
-    int index = 0;
-    if (clothStyle_ == TABLECLOTH) {
-        // Create particles in a grid pattern
-        for (int j = 0; j < nY_; j++) {
-            for (int i = 0; i < nX_; i++) {
-                index = i + nX_ * j;
-                x_[index] = oldx_[index] = startPos_ + offset + f3vec(restDX_ * i, 0, restDY_ * j);
-                colors_[3 * index] = (float)i / nX_;
-                colors_[3 * index + 1] = (float)j / nY_;
-                colors_[3 * index + 2] = .5f;
-                texCoords_[2 * index] = 10 * (float)i / nX_;
-                texCoords_[2 * index + 1] = 10 * (float)j / nY_;
-            }
+    // Find width and height of cloth
+    double width = m_nx * m_restDX;
+    double height = m_ny * m_restDY;
+    f3vec clothGridCorner(-width / 2.f, 0, -height / 2.f);
+
+    // Create grid of particles
+    for (int j = 0; j < m_ny; j++) {
+        for (int i = 0; i < m_nx; i++) {
+            int index = i + m_nx * j;
+            m_pos[index] = m_oldPos[index] = m_initClothCenter + clothGridCorner + f3vec(m_restDX * i, 0, m_restDY * j);
+            m_texCoords[index] = f2vec((float)i / m_nx, (float)j / m_ny) * m_texRepeats;
         }
+    }
 
-        // CREATE CONSTRAINTS
-        index = 0;
-        // !!!!!!!!!!!! NEED THESE (or cloth will fall apart) !!!!!!!
-        for (int j = 0; j < nY_ - 1; j++) {
-            for (int i = 0; i < nX_ - 1; i++) {
-                // Index points
-                // p1---p2
-                //  |    |
-                // p3---p4
-                f3vec* p1 = &x_[i + nX_ * j];
-                f3vec* p2 = &x_[i + 1 + nX_ * j];
-                f3vec* p3 = &x_[i + nX_ * (j + 1)];
-                f3vec* p4 = &x_[i + 1 + nX_ * (j + 1)];
-                // Horizontal springs
-                Constraint* hC = new RodConstraint(p1, p2, restDX_);
-                constraints_.push_back(hC);
+    // CREATE CONSTRAINTS or cloth will fall apart
+    for (int j = 0; j < m_ny - 1; j++) {
+        for (int i = 0; i < m_nx - 1; i++) {
+            // Index points
+            // p1---p2
+            //  |    |
+            // p3---p4
+            f3vec* p1 = &m_pos[i + m_nx * j];
+            f3vec* p2 = &m_pos[i + 1 + m_nx * j];
+            f3vec* p3 = &m_pos[i + m_nx * (j + 1)];
+            f3vec* p4 = &m_pos[i + 1 + m_nx * (j + 1)];
+            // Horizontal springs
+            Constraint* hC = new RodConstraint(p1, p2, m_restDX);
+            m_constraints.push_back(hC);
 
-                // Diagonal springs
-                Constraint* dC = new RodConstraint(p1, p4, restDDiag_);
-                constraints_.push_back(dC);
+            // Diagonal springs
+            Constraint* dC = new RodConstraint(p1, p4, restDDiag);
+            // XXX: What about a p2, p3 diagonal?
+            m_constraints.push_back(dC);
 
-                // Vertical springs
-                Constraint* vC = new RodConstraint(p1, p3, restDY_);
-                constraints_.push_back(vC);
-            }
+            // Vertical springs
+            Constraint* vC = new RodConstraint(p1, p3, m_restDY);
+            m_constraints.push_back(vC);
         }
-        // Last row
-        for (int i = 0; i < nX_ - 1; i++) {
-            f3vec* p1 = &x_[i + nX_ * (nY_ - 1)];
-            f3vec* p2 = &x_[i + 1 + nX_ * (nY_ - 1)];
-            Constraint* hC = new RodConstraint(p1, p2, restDX_);
-            constraints_.push_back(hC);
-        }
-        // Last column
-        for (int j = 0; j < nY_ - 1; j++) {
-            f3vec* p1 = &x_[nX_ - 1 + j * nX_];
-            f3vec* p2 = &x_[nX_ - 1 + (j + 1) * nX_];
-            Constraint* vC = new RodConstraint(p1, p2, restDY_);
-            constraints_.push_back(vC);
-        }
-        // End of !!!!!! NEED THESE !!!!!! section
+    }
+    // Last row
+    for (int i = 0; i < m_nx - 1; i++) {
+        f3vec* p1 = &m_pos[i + m_nx * (m_ny - 1)];
+        f3vec* p2 = &m_pos[i + 1 + m_nx * (m_ny - 1)];
+        Constraint* hC = new RodConstraint(p1, p2, m_restDX);
+        m_constraints.push_back(hC);
+    }
+    // Last column
+    for (int j = 0; j < m_ny - 1; j++) {
+        f3vec* p1 = &m_pos[m_nx - 1 + j * m_nx];
+        f3vec* p2 = &m_pos[m_nx - 1 + (j + 1) * m_nx];
+        Constraint* vC = new RodConstraint(p1, p2, m_restDY);
+        m_constraints.push_back(vC);
+    }
 
-        // THE REST OF THE CONSTRAINTS ARE FOR CURTAIN-LIKE BEHAVIOR
-#ifdef CURTAIN
+    // CONSTRAINTS FOR CURTAIN-LIKE BEHAVIOR
+    if (clothStyle == CURTAIN) {
         f3vec* p1;
         Constraint* pC;
 
-        // Fix two corner points
-        /*
-        p1 = &x_[0];
+#if 1
+        // Fix two corner particles to their initial positions
+        p1 = &m_pos[0];
         pC = new PointConstraint(p1, *p1);
-        constraints_.push_back(pC);
+        m_constraints.push_back(pC);
 
-        p1 = &x_[29];
+        p1 = &m_pos[m_nx - 1];
         pC = new PointConstraint(p1, *p1);
-        constraints_.push_back(pC);
-        */
-
-        // Constrain top of cloth to x_axis
-        for (i = 1; i < nX_; i++) {
-            if (i % 4 == 0) {
-                p1 = &x_[i];
-                f3vec cp(p1->x * .8, p1->y, p1->z);
-                // pC = new SlideConstraint(p1,*p1, CY_AXIS | CZ_AXIS);
-                pC = new PointConstraint(p1, cp);
-                constraints_.push_back(pC);
-            }
-        }
+        m_constraints.push_back(pC);
 #endif
 
-        // Shuffle constraints
-        for (int i = constraints_.size() - 1; i >= 0; i--) {
-            int j = LRand(i + 1);
-            // std::swap
-            Constraint* temp = constraints_[i];
-            constraints_[i] = constraints_[j];
-            constraints_[j] = temp;
-        }
-
-        // Create triangles
-        index = 0;
-        for (int j = 0; j < nY_ - 1; j++) {
-            for (int i = 0; i < nX_ - 1; i++) {
-                triangles_[3 * index] = i + j * nX_;
-                triangles_[3 * index + 1] = i + (j + 1) * nX_;
-                triangles_[3 * index + 2] = i + 1 + (j + 1) * nX_;
-                index++;
-                triangles_[3 * index] = i + j * nX_;
-                triangles_[3 * index + 1] = i + 1 + (j + 1) * nX_;
-                triangles_[3 * index + 2] = i + 1 + j * nX_;
-                index++;
+        // Constrain top of cloth to X axis
+        for (int i = 1; i < m_nx; i++) {
+            if (i % 4 == 0) {
+                p1 = &m_pos[i];
+                // pC = new SlideConstraint(p1, *p1, (ConstrainAxis)(CY_AXIS | CZ_AXIS));
+                f3vec cp(p1->x * .8f, p1->y, p1->z);
+                pC = new PointConstraint(p1, *p1);
+                m_constraints.push_back(pC);
             }
+        }
+    }
+
+    // Shuffle constraints
+    for (int i = m_constraints.size() - 1; i >= 0; i--) {
+        int j = LRand(i + 1);
+        std::swap(m_constraints[i], m_constraints[j]);
+    }
+
+    // Create triangles
+    int index = 0;
+    for (int j = 0; j < m_ny - 1; j++) {
+        for (int i = 0; i < m_nx - 1; i++) {
+            m_triInds[3 * index] = i + j * m_nx;
+            m_triInds[3 * index + 1] = i + (j + 1) * m_nx;
+            m_triInds[3 * index + 2] = i + 1 + (j + 1) * m_nx;
+            index++;
+            m_triInds[3 * index] = i + j * m_nx;
+            m_triInds[3 * index + 1] = i + 1 + (j + 1) * m_nx;
+            m_triInds[3 * index + 2] = i + 1 + j * m_nx;
+            index++;
         }
     }
 }
 
-// Verlet()
-// Integration step
+// Verlet Integration step
 void Cloth::Verlet()
 {
-    for (int i = 0; i < numParticles_; i++) {
-        f3vec& x = x_[i];
+    for (int i = 0; i < m_numParticles; i++) {
+        f3vec& x = m_pos[i];
         f3vec temp = x;
-        f3vec& oldx = oldx_[i];
-        f3vec& a = a_[i];
+        f3vec& oldx = m_oldPos[i];
+        f3vec& a = m_forceAcc[i];
 
-        // Verlet integration.  x-oldx is an approximation of velocity.
-        x += x * KDAMPING - oldx * KDAMPING + a * timeStep_ * timeStep_;
+        // Verlet integration: x - oldx is an approximation of velocity.
+        x += (x - oldx) * m_damping + a * m_timeStep * m_timeStep;
         oldx = temp;
     }
 }
 
-// XXX: Replace with Vector.h
-f3vec vmin(const f3vec& a, const f3vec& b)
-{
-    float x = (a.x < b.x) ? a.x : b.x;
-    float y = (a.y < b.y) ? a.y : b.y;
-    float z = (a.z < b.z) ? a.z : b.z;
-    return f3vec(x, y, z);
-}
-
-f3vec vmax(const f3vec& a, const f3vec& b)
-{
-    float x = (a.x >= b.x) ? a.x : b.x;
-    float y = (a.y >= b.y) ? a.y : b.y;
-    float z = (a.z >= b.z) ? a.z : b.z;
-    return f3vec(x, y, z);
-}
-
-// SatisfyConstraints
 void Cloth::SatisfyConstraints()
 {
     for (int j = 0; j < NUM_ITERATIONS; j++) {
-        if (isSphereMode_)
-            CollisionWithSphere();
+        if (m_collisionModeSpheres)
+            CollisionWithSpheres();
         else
-            CollisionWithQuad();
+            CollisionWithQuads();
 
-        for (int i = 0; i < constraints_.size(); i++) {
-            Constraint* c = constraints_[i];
+        for (int i = 0; i < m_constraints.size(); i++) {
+            Constraint* c = m_constraints[i];
             c->Apply();
         }
     }
 }
 
-// AccumulateForces
 // Accumulate forces on each particle
 void Cloth::AccumulateForces()
 {
     // All particles are affected by gravity
-    for (int i = 0; i < numParticles_; i++) { a_[i] = gravity_; }
+    for (int i = 0; i < m_numParticles; i++) { m_forceAcc[i] = m_gravity; }
 }
 
-// CollisionWithSphere
-void Cloth::CollisionWithSphere()
+void Cloth::CollisionWithSpheres()
 {
-    // Collide with sphere with center spherePos_, radius sphereRadius_
-    for (int i = 0; i < numParticles_; i++) {
-        double lengthV;
-
-        for (int j = 0; j < numSpheres_; j++) {
-            f3vec V = x_[i] - spherePos_[j];
-            lengthV = V.length();
+    // Collide with sphere with center m_spherePos, radius m_sphereRadii
+    for (int i = 0; i < m_numParticles; i++) {
+        for (int j = 0; j < m_numSpheres; j++) {
+            f3vec V = m_pos[i] - m_spherePos[j];
+            float lengthV = V.length();
 
             // Test for intersection with sphere
-            if (lengthV < sphereRadius_[j]) {
+            if (lengthV < m_sphereRadii[j]) {
                 // Translate point outwards along radius
-                x_[i] = spherePos_[j] + (V / lengthV) * sphereRadius_[j];
+                m_pos[i] = m_spherePos[j] + V * (m_sphereRadii[j] / lengthV);
             }
         }
     }
 }
 
-void Cloth::CollisionWithQuad()
+void Cloth::CollisionWithQuads()
 {
     // Assumes quad is in the XZ plane
-    for (int j = 0; j < numQuads_; j++) {
+    for (int j = 0; j < m_numQuads; j++) {
         // Check xz bounds of each point
-        for (int i = 0; i < numParticles_; i++) {
-            if (x_[i].x > collisionQuads_[j].kV_[0].x && x_[i].x < collisionQuads_[j].kV_[1].x && x_[i].z > collisionQuads_[j].kV_[0].z &&
-                x_[i].z < collisionQuads_[j].kV_[3].z) {
+        for (int i = 0; i < m_numParticles; i++) {
+            if (m_pos[i].x > m_collisionQuads[j].kV_[0].x && m_pos[i].x < m_collisionQuads[j].kV_[1].x && m_pos[i].z > m_collisionQuads[j].kV_[0].z &&
+                m_pos[i].z < m_collisionQuads[j].kV_[3].z) {
                 // The point is over the polygon, check height
-                if (x_[i].y > collisionQuads_[j].kV_[0].y - .1 && x_[i].y < collisionQuads_[j].kV_[0].y + .1) {
+                if (m_pos[i].y > m_collisionQuads[j].kV_[0].y - .1 && m_pos[i].y < m_collisionQuads[j].kV_[0].y + .1) {
                     // Add a point constraint
-                    f3vec constrainTo(x_[i].x, collisionQuads_[j].kV_[0].y, x_[i].z);
+                    f3vec constrainTo(m_pos[i].x, m_collisionQuads[j].kV_[0].y, m_pos[i].z);
                     Constraint* pC;
-                    pC = new PointConstraint(&x_[i], constrainTo);
-                    constraints_.push_back(pC);
+                    pC = new PointConstraint(&m_pos[i], constrainTo);
+                    m_constraints.push_back(pC);
                 }
             }
         }
     }
 }
 
-// MAIN LOOP
 // TimeStep()
 // Add up forces, advance system, satisfy constraints
 void Cloth::TimeStep()
@@ -320,106 +273,70 @@ void Cloth::TimeStep()
     AccumulateForces();
     Verlet();
     SatisfyConstraints();
-
-    // f3vec ctr(0.f);
-    // Aabb box;
-    //
-    // for (int i = 0; i < numParticles_; i++) {
-    //     ctr += x_[i];
-    //     box.grow(x_[i]);
-    // }
-    // ctr /= (float)numParticles_;
-    // std::cerr << "TimeStep: " << ctr << box << '\n';
 }
 
-// Display()
-void Cloth::Display(int mode)
+void Cloth::Display(DrawMode drawMode)
 {
     glEnable(GL_DEPTH_TEST);
 
-    if (mode & DRAW_POINTS) {
-        glPointSize(6.0);
-        glColor3f(1.0, 1.0, 1.0);
+    if (drawMode == DRAW_POINTS) {
+        glPointSize(3.0);
+        glColor3f(0, 1, 1);
         glBegin(GL_POINTS);
-        for (int i = 0; i < numParticles_; i++) { glVertex3f(x_[i].x, x_[i].y, x_[i].z); }
+        for (int i = 0; i < m_numParticles; i++) glVertex3fv(m_pos[i].getPtr());
         glEnd();
-    }
-
-    if (mode & DRAW_TRIS) {
+    } else if (drawMode == DRAW_LINES) {
+        glColor3f(1, 1, 0);
+        std::cerr << "Line mode not implemented\n";
+    } else if (drawMode == DRAW_TRIS) {
         glColor3f(1, 1, 1);
-        glEnable(GL_LIGHT0);
-        glEnable(GL_LIGHTING);
-        glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-        // glPolygonMode(GL_FRONT, GL_FILL);
-        // glPolygonMode(GL_BACK, GL_LINE);
-        glDisable(GL_CULL_FACE);
+        // glEnable(GL_LIGHT0);
+        // glEnable(GL_LIGHTING);
+        // glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
         glEnable(GL_TEXTURE_2D);
         // glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
         glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-        glBindTexture(GL_TEXTURE_2D, texID_);
+        glBindTexture(GL_TEXTURE_2D, m_texID);
 
-        for (int i = 0; i < numTriangles_; i++) {
-            f3vec &a = x_[triangles_[3 * i]], &b = x_[triangles_[3 * i + 1]], &c = x_[triangles_[3 * i + 2]];
-            f3vec n1 = Cross((c - b), (a - b)); // XXX: Make sure the winding is correct here.
-            // n1.normalize();
+        for (int i = 0; i < m_numTris; i++) {
+            f3vec &a = m_pos[m_triInds[3 * i]], &b = m_pos[m_triInds[3 * i + 1]], &c = m_pos[m_triInds[3 * i + 2]];
+            f3vec n1 = Cross((c - b), (a - b));
+            n1.normalize();
             glBegin(GL_TRIANGLES);
-            glNormal3f(n1.x, n1.y, n1.z);
-            glTexCoord2fv(&texCoords_[2 * triangles_[3 * i]]);
-            glVertex3f(a.x, a.y, a.z); // glColor3fv(colors_[triangles_[i][0]]);
-            glTexCoord2fv(&texCoords_[2 * triangles_[3 * i + 1]]);
-            glVertex3f(b.x, b.y, b.z); // glColor3fv(colors_[triangles_[i][1]]);
-            glTexCoord2fv(&texCoords_[2 * triangles_[3 * i + 2]]);
-            glVertex3f(c.x, c.y, c.z); // glColor3fv(colors_[triangles_[i][2]]);
+            glNormal3fv(n1.getPtr());
+            glTexCoord2fv(m_texCoords[m_triInds[3 * i]].getPtr());
+            glVertex3fv(a.getPtr());
+            glTexCoord2fv(m_texCoords[m_triInds[3 * i + 1]].getPtr());
+            glVertex3fv(b.getPtr());
+            glTexCoord2fv(m_texCoords[m_triInds[3 * i + 2]].getPtr());
+            glVertex3fv(c.getPtr());
             glEnd();
-            // Draw Normal
-            /*
-            glLineWidth(3.0);
-            glColor3f(1,1,1);
-            glDisable(GL_LIGHTING);
-            glBegin(GL_LINES);
-            f3vec &alpha = (a-b);
-            f3vec &beta = (c-b);
-            f3vec &pni = b + alpha*.5 + beta*.5;
-            f3vec &pnf = pni + n1*1.0;
-            glVertex3f(pni.x,pni.y,pni.z);
-            glVertex3f(pnf.x, pnf.y, pnf.z);
-            glEnd();
-            glEnable(GL_LIGHTING);
-            */
-
-            // glVertex3f(a.x, a.y, a.z);  glColor3fv(&colors_[3*triangles_[3*i]]);
-            // glVertex3f(b.x, b.y, b.z);  glColor3fv(&colors_[3*triangles_[3*i+1]]);
-            // glVertex3f(c.x, c.y, c.z);  glColor3fv(&colors_[3*triangles_[3*i+2]]);
         }
-        // glTexCoord2f(0.0,0.0); glVertex3f(-5,0,-5);
-        // glTexCoord2f(0.0,1.0); glVertex3f(-5,0, 5);
-        // glTexCoord2f(1.0,1.0); glVertex3f(5,0,5);
-        // glTexCoord2f(1.0,0.0); glVertex3f(5,0,-5);
-        // glEnd();
-        glFlush();
+
         glDisable(GL_TEXTURE_2D);
-        // glDisable(GL_LIGHTING);
+        glDisable(GL_LIGHTING);
     }
     GL_ASSERT();
 
-    if (isSphereMode_) {
-        // Draw Sphere
-        for (int i = 0; i < numSpheres_; i++) {
+    // Draw Constraints
+    glColor3f(1, 0, 1);
+    if (m_collisionModeSpheres) {
+        // Draw Spheres
+        for (int i = 0; i < m_numSpheres; i++) {
             glPushMatrix();
-            glTranslatef(spherePos_[i].x, spherePos_[i].y, spherePos_[i].z);
-            glutWireSphere(.9 * sphereRadius_[i], 10, 10);
+            glTranslatef(m_spherePos[i].x, m_spherePos[i].y, m_spherePos[i].z);
+            glutWireSphere(.9 * m_sphereRadii[i], 20, 20);
             glPopMatrix();
         }
     } else {
         // Draw quads
-        glColor3f(.5f, .5f, .5f);
         glBegin(GL_QUADS);
-        for (int i = 0; i < numQuads_; i++) {
-            glNormal3f(collisionQuads_[i].kNormal_.x, collisionQuads_[i].kNormal_.y, collisionQuads_[i].kNormal_.z);
-            glVertex3f(collisionQuads_[i].kV_[0].x, collisionQuads_[i].kV_[0].y, collisionQuads_[i].kV_[0].z);
-            glVertex3f(collisionQuads_[i].kV_[1].x, collisionQuads_[i].kV_[1].y, collisionQuads_[i].kV_[1].z);
-            glVertex3f(collisionQuads_[i].kV_[2].x, collisionQuads_[i].kV_[2].y, collisionQuads_[i].kV_[2].z);
-            glVertex3f(collisionQuads_[i].kV_[3].x, collisionQuads_[i].kV_[3].y, collisionQuads_[i].kV_[3].z);
+        for (int i = 0; i < m_numQuads; i++) {
+            glNormal3f(m_collisionQuads[i].kNormal_.x, m_collisionQuads[i].kNormal_.y, m_collisionQuads[i].kNormal_.z);
+            glVertex3f(m_collisionQuads[i].kV_[0].x, m_collisionQuads[i].kV_[0].y, m_collisionQuads[i].kV_[0].z);
+            glVertex3f(m_collisionQuads[i].kV_[1].x, m_collisionQuads[i].kV_[1].y, m_collisionQuads[i].kV_[1].z);
+            glVertex3f(m_collisionQuads[i].kV_[2].x, m_collisionQuads[i].kV_[2].y, m_collisionQuads[i].kV_[2].z);
+            glVertex3f(m_collisionQuads[i].kV_[3].x, m_collisionQuads[i].kV_[3].y, m_collisionQuads[i].kV_[3].z);
         }
         glEnd();
     }
@@ -431,21 +348,21 @@ void Cloth::ReadTexture(const char* texName)
     uc3Image texIm(texName);
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glGenTextures(1, &texID_);
-    glBindTexture(GL_TEXTURE_2D, texID_);
-    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glGenTextures(1, &m_texID);
+    glBindTexture(GL_TEXTURE_2D, m_texID);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, 128.0f);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGB, texIm.w(), texIm.h(), GL_RGB, GL_UNSIGNED_BYTE, texIm.pp());
 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texIm.w(), texIm.h(), 0, GL_RGB, GL_UNSIGNED_BYTE, texIm.pp());
     GL_ASSERT();
 }
 
 void Cloth::WriteTriModel(const char* FileName)
 {
-    printf("Writing to %s (%d triangles). . .\n", FileName, numTriangles_);
+    printf("Writing to %s (%d triangles). . .\n", FileName, m_numTris);
 
     unsigned int HexColor;
 
@@ -455,9 +372,9 @@ void Cloth::WriteTriModel(const char* FileName)
         exit(1);
     }
 
-    fprintf(fp, "%d\n", numTriangles_);
-    for (int i = 0; i < numTriangles_; i++) {
-        f3vec &a = x_[triangles_[3 * i]], &b = x_[triangles_[3 * i + 1]], &c = x_[triangles_[3 * i + 2]];
+    fprintf(fp, "%d\n", m_numTris);
+    for (int i = 0; i < m_numTris; i++) {
+        f3vec &a = m_pos[m_triInds[3 * i]], &b = m_pos[m_triInds[3 * i + 1]], &c = m_pos[m_triInds[3 * i + 2]];
         fprintf(fp, "%f %f %f ", a.x, a.y, a.z);
         fprintf(fp, "%f %f %f ", b.x, b.y, b.z);
         fprintf(fp, "%f %f %f ", c.x, c.y, c.z);

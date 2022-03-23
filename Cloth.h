@@ -1,24 +1,16 @@
-// Cloth.hpp
-/*
-  This cloth simulation is an implementation of the algorithm
-   defined by Thomas Jakobsen of IO Interactive in the GDC course
-   'Advanced Character Physics in 2001
-*/
+// Cloth.h - An implementation of the algorithm defined by Thomas Jakobsen of IO Interactive in the GDC course 'Advanced Character Physics in 2001
 
 #pragma once
 
-#include "ClothUtil.h"
 #include "Constraint.h"
 
 #include <vector>
 
 #define NUM_ITERATIONS 3
-#define KDAMPING .9
-//#define CURTAIN
 
-enum ClothStyle { TABLECLOTH, CURTAIN };
+enum ClothStyle { TABLECLOTH, CURTAIN, NUM_CLOTH_STYLES };
 
-enum DrawMode { DRAW_POINTS = 1, DRAW_LINES = 2, DRAW_TRIS = 4 };
+enum DrawMode { DRAW_POINTS, DRAW_LINES, DRAW_TRIS, NUM_DRAW_MODES };
 
 struct CollisionQuad {
     f3vec kV_[4];
@@ -28,16 +20,16 @@ struct CollisionQuad {
 class Cloth {
 public:
     Cloth();
-    Cloth(int nx, int ny,              // Number of grid points in x,y
-          float dx, float dy,          // Spacing between grid points
-          const f3vec& p,              // Cloth center
-          double timestep, int style); // Timestep and style of cloth
+    Cloth(int nx, int ny,                                    // Number of grid points in x,y
+          float dx, float dy,                                // Spacing between grid points
+          const f3vec& clothCenter,                          // Cloth center
+          double timestep, float damping, ClothStyle style); // Timestep and style of cloth
     ~Cloth();
-    void TimeStep(); // Update cloth
-    void Reset();    // Move cloth back to original position
-    void Display(int mode = DRAW_TRIS);
-    void MoveSphere(const f3vec& dx); // Interaction with cloth by moving sphere
-    void MoveQuads(const f3vec& dx);
+    void TimeStep();                        // Update cloth
+    void Reset(ClothStyle clothStyle);      // Move cloth to original position
+    void Display(DrawMode mode);            // Emit OpenGL commands
+    void MoveSpheres(const f3vec& dx);      // Interact with cloth by moving spheres
+    void MoveQuads(const f3vec& dx);        // Interact with cloth by moving quads
     void SetCollideMode(bool isSphereMode); // true = spheremode, false = polymode
     void WriteTriModel(const char* filename);
 
@@ -48,40 +40,36 @@ private:
 
     void ReadTexture(const char*);
 
-    int nX_;           // Grid points in x-dimension
-    int nY_;           // Grid points in y-dimension
-    int numParticles_; // Number of total particles
-    int numTriangles_; // Number of triangles for rendering
-    float restDX_;     // Resting length of particle-particle constraints
-    float restDY_;
-    float restDDiag_;
+    // Simulation data
+    int m_nx;                               // Grid points in x-dimension
+    int m_ny;                               // Grid points in y-dimension
+    int m_numParticles;                     // Number of total particles
+    float m_restDX, m_restDY, restDDiag;    // Resting length of particle-particle constraints
+    f3vec m_initClothCenter;                // Upper left hand corner of cloth
+    f3vec* m_pos;                           // Current particle positions
+    f3vec* m_oldPos;                        // Old positions
+    f3vec* m_forceAcc;                      // Force accumulators
+    std::vector<Constraint*> m_constraints; // Constraints
+    f3vec m_gravity = {0, -40, 0};          // Gravity
+    float m_damping;                        // Damping constant to improve stability
+    double m_timeStep;                      // Time step
 
-    f3vec startPos_;                       // Upper left hand corner of cloth
-    f3vec* x_;                             // Current particle positions
-    f3vec* oldx_;                          // Old positions
-    f3vec* a_;                             // Force accumulators
-    std::vector<Constraint*> constraints_; // Constraints - use stl vector for on-the-fly constraint creation
-    int* triangles_;                       // Triangles for rendering
-    float* colors_;                        // Vertex colors
-    float* texCoords_;
-    f3vec gravity_;   // Gravity
-    double timeStep_; // Time step
-    int clothStyle_;  // Type of cloth we are simulating
+    // Rendering data
+    int m_numTris;            // Number of triangles for rendering
+    int* m_triInds;           // Triangle indices for rendering
+    f2vec* m_texCoords;       // Texture coordinates
+    float m_texRepeats = 3.f; // Times the texture image repeats across the cloth
+    unsigned int m_texID;     // OpenGL texture ID
 
-    unsigned char* texColors_; // Texels
-    int texWidth_;
-    int texHeight_;
-    unsigned int texID_;
-
-    bool isSphereMode_;
-    void CreateSpheres(); // Collision sphere
-    void CollisionWithSphere();
-    int numSpheres_;
-    float* sphereRadius_;
-    f3vec* spherePos_;
+    bool m_collisionModeSpheres;
+    void CreateSpheres();
+    void CollisionWithSpheres();
+    int m_numSpheres;
+    float* m_sphereRadii;
+    f3vec* m_spherePos;
 
     void CreateQuads();
-    void CollisionWithQuad();
-    int numQuads_;
-    CollisionQuad* collisionQuads_;
+    void CollisionWithQuads();
+    int m_numQuads;
+    CollisionQuad* m_collisionQuads;
 };

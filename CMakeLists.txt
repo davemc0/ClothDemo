@@ -40,8 +40,7 @@ include_directories(${GLUT_INCLUDE_DIR})
 link_libraries(${GLUT_LIBRARIES})
 
 set(SOURCES
-    Cloth.cpp  Constraint.cpp  Vernet.cpp Cloth.h  Constraint.h
-    #stdinc.h
+    Cloth.cpp Cloth.h Constraint.h DemoCloth.cpp
 )
 
 source_group("src"  FILES ${SOURCES})
