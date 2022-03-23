@@ -18,16 +18,16 @@ Cloth::Cloth() { Cloth(40, 40, 1.0f, 1.0f, f3vec(0, 0, 0), .01f, 0.9f, TABLECLOT
 Cloth::Cloth(int nx, int ny, float dx, float dy, const f3vec& clothCenter_, float timestep, float damping, ClothStyle clothStyle) :
     m_nx(nx), m_ny(ny), m_restDX(dx), m_restDY(dy), m_initClothCenter(clothCenter_), m_timeStep(timestep), m_damping(damping)
 {
-    m_numParticles = nx * ny;
+    int numParticles = nx * ny;
     m_numTris = 2 * (nx - 1) * (ny - 1);
     restDDiag = sqrt(dx * dx + dy * dy);
 
     // Create cloth node points and constraints
-    m_pos.resize(m_numParticles);
-    m_oldPos.resize(m_numParticles);
-    m_forceAcc.resize(m_numParticles);
-    m_triInds.resize(m_numTris * 3);
-    m_texCoords.resize(m_numParticles);
+    m_pos.resize(numParticles);
+    m_oldPos.resize(numParticles);
+    m_forceAcc.resize(numParticles);
+    m_triInds.resize(m_numTris);
+    m_texCoords.resize(numParticles);
     Reset(clothStyle);
 
     // Create colliders
@@ -111,20 +111,14 @@ void Cloth::Reset(ClothStyle clothStyle)
     }
 
     // Shuffle constraints by swapping each one with another random one
-    for (int i = 0; i < m_constraints.size(); i++) std::swap(m_constraints[i], m_constraints[LRand(m_constraints.size())]);
+    for (int i = 0; i < m_constraints.size(); i++) std::swap(m_constraints[i], m_constraints[LRand((int)m_constraints.size())]);
 
     // Create triangle indices for rendering
     int index = 0;
     for (int j = 0; j < m_ny - 1; j++) {
         for (int i = 0; i < m_nx - 1; i++) {
-            m_triInds[3 * index] = i + j * m_nx;
-            m_triInds[3 * index + 1] = i + (j + 1) * m_nx;
-            m_triInds[3 * index + 2] = i + 1 + (j + 1) * m_nx;
-            index++;
-            m_triInds[3 * index] = i + j * m_nx;
-            m_triInds[3 * index + 1] = i + 1 + (j + 1) * m_nx;
-            m_triInds[3 * index + 2] = i + 1 + j * m_nx;
-            index++;
+            m_triInds[index++] = {i + j * m_nx, i + (j + 1) * m_nx, i + 1 + (j + 1) * m_nx};
+            m_triInds[index++] = {i + j * m_nx, i + 1 + (j + 1) * m_nx, i + 1 + j * m_nx};
         }
     }
 }
@@ -164,13 +158,13 @@ void Cloth::SatisfyConstraints()
 void Cloth::AccumulateForces()
 {
     // All particles are affected by gravity; could put other forces here, too
-    for (int i = 0; i < m_numParticles; i++) { m_forceAcc[i] = m_gravity; }
+    for (int i = 0; i < m_pos.size(); i++) { m_forceAcc[i] = m_gravity; }
 }
 
 void Cloth::CollisionWithSpheres()
 {
     // Collide each particle with each sphere
-    for (int i = 0; i < m_numParticles; i++) {
+    for (int i = 0; i < m_pos.size(); i++) {
         for (size_t j = 0; j < m_collisionSpheres.size(); j++) {
             f3vec spherePos(m_collisionSpheres[j]);
             float sphereRad = m_collisionSpheres[j].w;
@@ -186,7 +180,7 @@ void Cloth::CollisionWithSpheres()
 void Cloth::CollisionWithBoxes()
 {
     // Collide each particle with each AABB
-    for (int i = 0; i < m_numParticles; i++) {
+    for (int i = 0; i < m_pos.size(); i++) {
         for (size_t j = 0; j < m_collisionBoxes.size(); j++) {
             // If the particle is inside the box push it to the nearest point outside the box
             if (m_collisionBoxes[j].contains(m_pos[i])) m_pos[i] = m_collisionBoxes[j].nearestOnSurface(m_pos[i]);
@@ -238,7 +232,7 @@ void Cloth::Display(DrawMode drawMode)
         glPointSize(3.0);
         glColor3f(0, 1, 1);
         glBegin(GL_POINTS);
-        for (int i = 0; i < m_numParticles; i++) glVertex3fv(m_pos[i].getPtr());
+        for (int i = 0; i < m_pos.size(); i++) glVertex3fv(m_pos[i].getPtr());
         glEnd();
     } else if (drawMode == DRAW_LINES) {
         glLineWidth(2.5f);
@@ -257,20 +251,21 @@ void Cloth::Display(DrawMode drawMode)
         glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
         glBindTexture(GL_TEXTURE_2D, m_texID);
 
+        // TODO: Could make an array of normals and use vertex arrays.
+        glBegin(GL_TRIANGLES);
         for (int i = 0; i < m_numTris; i++) {
-            f3vec &a = m_pos[m_triInds[3 * i]], &b = m_pos[m_triInds[3 * i + 1]], &c = m_pos[m_triInds[3 * i + 2]];
+            f3vec &a = m_pos[m_triInds[i][0]], &b = m_pos[m_triInds[i][1]], &c = m_pos[m_triInds[i][2]];
             f3vec n1 = Cross((c - b), (a - b));
             n1.normalize();
-            glBegin(GL_TRIANGLES);
             glNormal3fv(n1.getPtr());
-            glTexCoord2fv(m_texCoords[m_triInds[3 * i]].getPtr());
+            glTexCoord2fv(m_texCoords[m_triInds[i][0]].getPtr());
             glVertex3fv(a.getPtr());
-            glTexCoord2fv(m_texCoords[m_triInds[3 * i + 1]].getPtr());
+            glTexCoord2fv(m_texCoords[m_triInds[i][1]].getPtr());
             glVertex3fv(b.getPtr());
-            glTexCoord2fv(m_texCoords[m_triInds[3 * i + 2]].getPtr());
+            glTexCoord2fv(m_texCoords[m_triInds[i][2]].getPtr());
             glVertex3fv(c.getPtr());
-            glEnd();
         }
+        glEnd();
 
         glDisable(GL_TEXTURE_2D);
         glDisable(GL_LIGHTING);
@@ -333,7 +328,7 @@ void Cloth::WriteTriModel(const char* FileName)
 
     fprintf(fp, "%d\n", m_numTris);
     for (int i = 0; i < m_numTris; i++) {
-        f3vec &a = m_pos[m_triInds[3 * i]], &b = m_pos[m_triInds[3 * i + 1]], &c = m_pos[m_triInds[3 * i + 2]];
+        f3vec &a = m_pos[m_triInds[i][0]], &b = m_pos[m_triInds[i][1]], &c = m_pos[m_triInds[i][2]];
         fprintf(fp, "%f %f %f ", a.x, a.y, a.z);
         fprintf(fp, "%f %f %f ", b.x, b.y, b.z);
         fprintf(fp, "%f %f %f ", c.x, c.y, c.z);

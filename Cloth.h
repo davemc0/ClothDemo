@@ -41,7 +41,6 @@ private:
     // Simulation data
     int m_nx;                                          // Grid points in x-dimension
     int m_ny;                                          // Grid points in y-dimension
-    int m_numParticles;                                // Number of total particles
     float m_restDX, m_restDY, restDDiag;               // Resting length of particle-particle constraints
     f3vec m_initClothCenter;                           // Upper left hand corner of cloth
     std::vector<f3vec> m_pos;                          // Current particle positions
@@ -58,7 +57,7 @@ private:
 
     // Rendering data
     int m_numTris;                  // Number of triangles for rendering
-    std::vector<int> m_triInds;     // Triangle indices for rendering
+    std::vector<i3vec> m_triInds;   // Triangle indices for rendering
     std::vector<f2vec> m_texCoords; // Texture coordinates
     float m_texRepeats = 3.f;       // Times the texture image repeats across the cloth
     unsigned int m_texID;           // OpenGL texture ID

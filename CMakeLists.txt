@@ -12,8 +12,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(PROJECT_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # Warning level, all warnings as errors, build in parallel, disable security warnings, latest language support
-# add_compile_options(/W3 /WX /MP /sdl- /std:c++latest)
-add_compile_options(/MP /sdl- /std:c++latest)
+add_compile_options(/W3 /WX /MP /sdl- /std:c++latest)
 
 set(__ARCH "x64")
 
