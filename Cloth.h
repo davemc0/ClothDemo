@@ -57,8 +57,9 @@ private:
 
     // Rendering data
     int m_numTris;                  // Number of triangles for rendering
-    std::vector<i3vec> m_triInds;   // Triangle indices for rendering
-    std::vector<f2vec> m_texCoords; // Texture coordinates
+    std::vector<i3vec> m_triInds;   // Triangle indices for rendering and saving
+    std::vector<f2vec> m_texCoords; // Texture coordinates per vertex for rendering
+    std::vector<f3vec> m_normals;   // Normals per vertex for rendering
     float m_texRepeats = 3.f;       // Times the texture image repeats across the cloth
     unsigned int m_texID;           // OpenGL texture ID
 };

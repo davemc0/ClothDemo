@@ -28,6 +28,7 @@ Cloth::Cloth(int nx, int ny, float dx, float dy, const f3vec& clothCenter_, floa
     m_forceAcc.resize(numParticles);
     m_triInds.resize(m_numTris);
     m_texCoords.resize(numParticles);
+    m_normals.resize(numParticles);
     Reset(clothStyle);
 
     // Create colliders
@@ -231,17 +232,20 @@ void Cloth::Display(DrawMode drawMode)
     if (drawMode == DRAW_POINTS) {
         glPointSize(3.0);
         glColor3f(0, 1, 1);
-        glBegin(GL_POINTS);
-        for (int i = 0; i < m_pos.size(); i++) glVertex3fv(m_pos[i].getPtr());
-        glEnd();
+
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glVertexPointer(3, GL_FLOAT, 0, m_pos.data());
+        glDrawArrays(GL_POINTS, 0, (GLsizei)m_pos.size());
+        glDisableClientState(GL_VERTEX_ARRAY);
     } else if (drawMode == DRAW_LINES) {
         glLineWidth(2.5f);
         glColor3f(1, 1, 1);
+        glEnableClientState(GL_VERTEX_ARRAY);
         for (int i = 0; i < m_nx - 1; i++) {
-            glBegin(GL_LINE_STRIP);
-            for (int j = 0; j < m_ny - 1; j++) { glVertex3fv(m_pos[i + m_nx * j].getPtr()); }
-            glEnd();
+            glVertexPointer(3, GL_FLOAT, m_ny * sizeof(f3vec), &m_pos[i]);
+            glDrawArrays(GL_LINE_STRIP, 0, (GLsizei)m_ny);
         }
+        glDisableClientState(GL_VERTEX_ARRAY);
     } else if (drawMode == DRAW_TRIS) {
         glColor3f(1, 1, 1);
         glEnable(GL_LIGHT0);
@@ -251,21 +255,28 @@ void Cloth::Display(DrawMode drawMode)
         glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
         glBindTexture(GL_TEXTURE_2D, m_texID);
 
-        // TODO: Could make an array of normals and use vertex arrays.
-        glBegin(GL_TRIANGLES);
         for (int i = 0; i < m_numTris; i++) {
             f3vec &a = m_pos[m_triInds[i][0]], &b = m_pos[m_triInds[i][1]], &c = m_pos[m_triInds[i][2]];
             f3vec n1 = Cross((c - b), (a - b));
             n1.normalize();
-            glNormal3fv(n1.getPtr());
-            glTexCoord2fv(m_texCoords[m_triInds[i][0]].getPtr());
-            glVertex3fv(a.getPtr());
-            glTexCoord2fv(m_texCoords[m_triInds[i][1]].getPtr());
-            glVertex3fv(b.getPtr());
-            glTexCoord2fv(m_texCoords[m_triInds[i][2]].getPtr());
-            glVertex3fv(c.getPtr());
+            m_normals[m_triInds[i][0]] = n1; // Computing facet normals but using them as vertex normals because glDrawElements requires vertex normals
+            m_normals[m_triInds[i][1]] = n1; // Most normals get written to three times, but no big deal.
+            m_normals[m_triInds[i][2]] = n1; // Could average them to get higher quality normals but not worth it.
         }
-        glEnd();
+
+        glTexCoordPointer(2, GL_FLOAT, 0, m_texCoords.data());
+        glNormalPointer(GL_FLOAT, 0, m_normals.data());
+        glVertexPointer(3, GL_FLOAT, 0, m_pos.data());
+
+        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+        glEnableClientState(GL_NORMAL_ARRAY);
+        glEnableClientState(GL_VERTEX_ARRAY);
+
+        glDrawElements(GL_TRIANGLES, (GLsizei)m_triInds.size() * 3, GL_UNSIGNED_INT, m_triInds.data());
+
+        glDisableClientState(GL_VERTEX_ARRAY);
+        glDisableClientState(GL_NORMAL_ARRAY);
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
         glDisable(GL_TEXTURE_2D);
         glDisable(GL_LIGHTING);
