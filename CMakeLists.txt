@@ -6,22 +6,13 @@ set(EXE_NAME ClothDemo)
 
 project(${EXE_NAME})
 
-set(CMAKE_CXX_STANDARD 11 CACHE STRING "" FORCE)
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-
+set(CMAKE_CXX_STANDARD 17)
 set(PROJECT_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
-# Warning level, all warnings as errors, build in parallel, disable security warnings, latest language support
-add_compile_options(/W3 /WX /MP /sdl- /std:c++latest)
-
-set(__ARCH "x64")
-
-# GLEW
+# GLEW - setenv GLEW_HOME C:/Users/davemc/source/repos/Goodies/glew-2.2.0
+set(CMAKE_PREFIX_PATH $ENV{GLEW_HOME})
+set(CMAKE_LIBRARY_PATH $ENV{GLEW_HOME}/lib/Release/x64)
 set(GLEW_USE_STATIC_LIBS TRUE)
-# set(GLEW_VERBOSE TRUE)
-
-set(CMAKE_PREFIX_PATH "../Goodies/glew-2.2.0")
-set(CMAKE_LIBRARY_PATH "../Goodies/glew-2.2.0/lib/Release/x64")
 
 find_package(GLEW REQUIRED)
 
@@ -29,18 +20,19 @@ add_definitions(-DGLEW_STATIC)
 include_directories(${GLEW_INCLUDE_DIRS})
 link_libraries(${GLEW_STATIC_LIBRARIES})
 
-# FreeGLUT
+# FreeGLUT - setenv GLUT_HOME C:/Users/davemc/source/repos/Goodies/freeglut-3.2.2
 
-set(GLUT_INCLUDE_DIR "../Goodies/freeglut-3.2.2/include")
-set(GLUT_LIBRARIES "optimized;C:/Users/davemc/source/repos/Goodies/freeglut-3.2.2/lib/Release/freeglut_static.lib;debug;C:/Users/davemc/source/repos/Goodies/freeglut-3.2.2/lib/Debug/freeglut_staticd.lib")
+# This works for DLLs, but findGLUT.cmake doesn't know about static libraries on Windows, so we have to do it manually.
+# find_package(GLUT REQUIRED)
+
+set(GLUT_INCLUDE_DIR $ENV{GLUT_HOME}/include)
+set(GLUT_LIBRARIES "optimized;$ENV{GLUT_HOME}/lib/Release/freeglut_static.lib;debug;$ENV{GLUT_HOME}/lib/Debug/freeglut_staticd.lib")
 
 add_definitions(-DFREEGLUT_STATIC)
 include_directories(${GLUT_INCLUDE_DIR})
 link_libraries(${GLUT_LIBRARIES})
 
-set(SOURCES
-    Cloth.cpp Cloth.h Constraint.h ClothDemo.cpp
-)
+set(SOURCES Cloth.cpp Cloth.h Constraint.h ClothDemo.cpp)
 
 source_group("src"  FILES ${SOURCES})
 
