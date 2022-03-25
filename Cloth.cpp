@@ -112,7 +112,7 @@ void Cloth::Reset(ClothStyle clothStyle)
     }
 
     // Shuffle constraints by swapping each one with another random one
-    for (int i = 0; i < m_constraints.size(); i++) std::swap(m_constraints[i], m_constraints[LRand((int)m_constraints.size())]);
+    for (int i = 0; i < m_constraints.size(); i++) std::swap(m_constraints[i], m_constraints[irand((int)m_constraints.size())]);
 
     // Create triangle indices for rendering
     int index = 0;
