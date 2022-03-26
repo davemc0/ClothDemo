@@ -1,3 +1,5 @@
+![Awesome cloth simulation](Screenshot2.jpg)
+
 # ClothDemo
 An interactive, physically-based cloth demo in C++ using OpenGL, GLUT, GLEW, and CMake
 
@@ -18,3 +20,5 @@ I've parallelized the code on the CPU simply by using std::for_each(std::executi
 Builds for me using CMake 3.20, Visual Studio 2019, freeglut-3.2.2, glew-2.2.0.
 
 This also depends on my DMcTools library. This is my graphics tools that I've been using and evolving for the last 25+ years. Grab it from https://github.com/davemc0/DMcTools.git and place DMcTools/ in a directory adjacent to ClothDemo/.
+
+![Awesome cloth simulation](Screenshot1.jpg)
