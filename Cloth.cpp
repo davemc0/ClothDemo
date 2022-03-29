@@ -90,24 +90,23 @@ void Cloth::Reset(ClothStyle clothStyle)
     }
 
     // Constraints for curtain-like behavior
-    if (clothStyle == CURTAIN || clothStyle == SLIDING_CURTAIN) {
-        f3vec* p1;
-
-        // Fix two corner particles to their initial positions
-        p1 = &m_pos[0];
-        m_constraints.push_back(new PointConstraint(p1, *p1));
-        p1 = &m_pos[m_nx - 1];
-        m_constraints.push_back(new PointConstraint(p1, *p1));
-
-        // Constrain top of cloth to X axis
-        for (int i = 1; i < m_nx; i++) {
-            if (i % 4 == 0) {
-                p1 = &m_pos[i];
-                if (clothStyle == SLIDING_CURTAIN)
-                    m_constraints.push_back(new SlideConstraint(p1, *p1, (ConstrainAxis)(CY_AXIS | CZ_AXIS)));
-                else
-                    m_constraints.push_back(new PointConstraint(p1, *p1));
-            }
+    if (clothStyle == CURTAIN) {
+        for (int i = 0; i < m_nx; i += 4) {
+            f3vec* p1 = &m_pos[i];
+            m_constraints.push_back(new PointConstraint(p1, *p1)); // Constrain top of cloth to X axis
+        }
+    } else if (clothStyle == SLIDING_CURTAIN) {
+        for (int i = 0; i < m_nx; i += 4) {
+            if (i == 0)
+                m_constraints.push_back(new PointConstraint(&m_pos[i], m_pos[i])); // Fix top-left corner particle to initial position
+            else
+                m_constraints.push_back(new SlideConstraint(&m_pos[i], m_pos[i], (ConstrainAxis)(CY_AXIS | CZ_AXIS))); // Let top particles slide in X
+        }
+    } else if (clothStyle == PLEATED_CURTAIN) {
+        for (int i = 0; i < m_nx; i += 10) {
+            f3vec tgt = m_pos[i];
+            tgt.x *= 0.7f;                                                // Shrink X coords to cause pleating
+            m_constraints.push_back(new PointConstraint(&m_pos[i], tgt)); // Constrain top of cloth to X axis
         }
     }
 
