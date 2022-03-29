@@ -89,6 +89,25 @@ void Cloth::Reset(ClothStyle clothStyle)
         m_constraints.push_back(new RodConstraint(p1, p2, m_restDY));
     }
 
+    // Stiffening constraints
+    const int ST = 10;
+    for (int j = 0; j < m_ny - ST; j++) {
+        for (int i = 0; i < m_nx - ST; i++) {
+            // Index points
+            // p1---p2
+            //  |    |
+            // p3---p4
+            f3vec* p1 = &m_pos[i + m_nx * j];
+            f3vec* p2 = &m_pos[i + ST + m_nx * j];
+            f3vec* p3 = &m_pos[i + m_nx * (j + ST)];
+            f3vec* p4 = &m_pos[i + ST + m_nx * (j + ST)];
+            m_constraints.push_back(new RodConstraint(p1, p2, m_restDX * ST));  // Horizontal springs
+            m_constraints.push_back(new RodConstraint(p1, p4, restDDiag * ST)); // Diagonal springs
+            m_constraints.push_back(new RodConstraint(p2, p3, restDDiag * ST)); // Faster with only one diagonal but sags to the left
+            m_constraints.push_back(new RodConstraint(p1, p3, m_restDY * ST));  // Vertical springs
+        }
+    }
+
     // Constraints for curtain-like behavior
     if (clothStyle == CURTAIN) {
         for (int i = 0; i < m_nx; i += 4) {
