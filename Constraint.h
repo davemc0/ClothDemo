@@ -18,6 +18,8 @@ public:
     PointConstraint(f3vec* pa, const f3vec& fp) : m_pA(pa), m_fixedPos(fp) {}
     ~PointConstraint() {};
     void Apply() const;
+    const f3vec& getPos() const { return m_fixedPos; }
+    void setPos(const f3vec& np) { m_fixedPos = np; }
 };
 
 // Constrain two particles to a specific distance from each other

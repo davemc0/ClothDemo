@@ -14,8 +14,7 @@ enum CollisionObjects { COLLIDE_SPHERES, COLLIDE_BOXES, COLLIDE_INSIDE_BOXES, NU
 class Cloth {
 public:
     Cloth();
-    Cloth(int nx, int ny,                                   // Number of grid points in x,y
-          float dx, float dy,                               // Spacing between grid points
+    Cloth(int nx, int ny, float dx, float dy,               // Number of grid points in x,y, and Spacing between grid points
           const f3vec& clothCenter,                         // Cloth center
           float timestep, float damping, ClothStyle style); // Timestep, damping factor, and style of cloth
     ~Cloth();                                               // Destroy
@@ -26,6 +25,9 @@ public:
     void SetCollideObjectType(CollisionObjects collObj);    // What kind of objects to collide against
     void SetConstraintIters(int iters);                     // Set m_constraintItersPerTimeStep
     void WriteTriModel(const char* filename);               // Write current cloth mesh to geometry file
+    void GrabParticles(const f3vec& nPt);                   // Grab particles on projective mouse click line
+    void UngrabParticles();                                 // Ungrab particles on mouse-up
+    void MoveGrabbedParticles(const f3vec& delta);          // Interact with cloth by moving clicked-on particles
 
 private:
     void VerletIntegration();
@@ -47,6 +49,7 @@ private:
     std::vector<f3vec> m_oldPos;                       // Old positions
     std::vector<f3vec> m_forceAcc;                     // Force accumulators
     std::vector<Constraint*> m_constraints;            // Constraints
+    std::vector<PointConstraint*> m_grabConstraints;   // Constraints for particles that were grabbed for moving around
     f3vec m_gravity = {0, -40, 0};                     // Gravity
     float m_damping;                                   // Damping constant to improve stability
     float m_timeStep;                                  // Time step

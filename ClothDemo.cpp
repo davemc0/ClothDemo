@@ -16,14 +16,35 @@
 // User Interface Globals
 bool paused = false, fullScreen = false;
 int WW = 1024, WH = 1024, constraintIters = 50; // If it runs slow reduce constraintIters first.
+f3vec grabPtWorld, grabPtWin;                   // The point being dragged around by a mouse click and drag
 DrawMode drawMode = DRAW_TRIS;
 ClothStyle clothStyle = TABLECLOTH;
 CollisionObjects collisionObjects = COLLIDE_SPHERES;
 Cloth* pCloth;
 Timer FrameRateTimer;
 
+// Given x,y,z window location compute 3D point clicked on; z should be like 0.9999
+// Window y coord needs to be reversed for 0 at bottom before calling this.
+f3vec unproject(f3vec winPt)
+{
+    double modelmat[16];
+    glGetDoublev(GL_MODELVIEW_MATRIX, modelmat);
+    double projmat[16];
+    glGetDoublev(GL_PROJECTION_MATRIX, projmat);
+    int viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+
+    d3vec worldPt;
+    bool ok = gluUnProject(winPt.x, winPt.y, winPt.z, modelmat, projmat, viewport, &worldPt.x, &worldPt.y, &worldPt.z);
+    ASSERT_R(ok);
+
+    return f3vec(worldPt.x, worldPt.y, worldPt.z);
+}
+
 void userReshapeFunc0(int w, int h)
 {
+    WW = w;
+    WH = h;
     glViewport(0, 0, w, h);
 
     glMatrixMode(GL_PROJECTION);
@@ -31,8 +52,8 @@ void userReshapeFunc0(int w, int h)
 
     float Yfov = 45;             // VERTICAL FIELD OF VIEW IN DEGREES
     float Aspect = w / float(h); // WIDTH OVER HEIGHT
-    float Near = 0.1f;           // NEAR PLANE DISTANCE
-    float Far = 1000.0f;         // FAR PLANE DISTANCE
+    float Near = 1.f;            // NEAR PLANE DISTANCE
+    float Far = 500.0f;          // FAR PLANE DISTANCE
 
     gluPerspective(Yfov, Aspect, Near, Far);
 }
@@ -41,7 +62,7 @@ void userReshapeFunc0(int w, int h)
 void userDisplayFunc0()
 {
     static int frameCount = 0;
-    if (frameCount++ == 60) {
+    if (frameCount++ == 600) {
         double time = frameCount / FrameRateTimer.Reset();
         std::cerr << "Avg. frame rate: " << time << '\n';
         frameCount = 0;
@@ -55,9 +76,6 @@ void userDisplayFunc0()
     f3vec Eye(0, 30, 80), Up(0, 1, 0);
     gluLookAt(Eye.x, Eye.y, Eye.z, LookAtCntr.x, LookAtCntr.y, LookAtCntr.z, Up.x, Up.y, Up.z);
 
-    // glEnable(GL_LIGHTING);
-    // glEnable(GL_LIGHT0);
-    // glShadeModel(GL_SMOOTH);
     glClearColor(0, 0, 0, 0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -86,10 +104,16 @@ void userMouseFunc0(int button, int state, int x, int y)
     if (Modifiers & GLUT_ACTIVE_ALT) printf("ALT-");
 
     if (button == GLUT_LEFT_BUTTON)
-        if (state == GLUT_DOWN)
-            printf("LEFT-DOWN\n");
-        else
-            printf("LEFT-UP\n");
+        if (state == GLUT_DOWN) {
+            grabPtWin = f3vec(x, WH - y - 1, 1.f); // Invert y because GLUT uses window coords and the OpenGL viewport uses upside-down coords
+            glReadPixels(grabPtWin.x, grabPtWin.y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &grabPtWin.z); // Get depth value of clicked point
+            if (grabPtWin.z < 0 || grabPtWin.z >= 1.f) return;
+
+            grabPtWorld = unproject(grabPtWin);
+            pCloth->GrabParticles(grabPtWorld);
+        } else {
+            pCloth->UngrabParticles();
+        }
     if (button == GLUT_RIGHT_BUTTON)
         if (state == GLUT_DOWN)
             printf("RIGHT-DOWN\n");
@@ -97,7 +121,17 @@ void userMouseFunc0(int button, int state, int x, int y)
             printf("RIGHT-UP\n");
 }
 
-void userMotionFunc0(int x, int y) { printf("%d %d\n", x, y); }
+void userMotionFunc0(int x, int y)
+{
+    if (grabPtWin.z < 0 || grabPtWin.z >= 1.f) return;
+    grabPtWin.x = x;
+    grabPtWin.y = WH - y - 1;
+
+    f3vec newGrabPtWorld = unproject(grabPtWin);
+    f3vec delta = newGrabPtWorld - grabPtWorld;
+    pCloth->MoveGrabbedParticles(delta);
+    grabPtWorld = newGrabPtWorld;
+}
 
 void userKeyboardFunc0(unsigned char Key, int x, int y)
 {

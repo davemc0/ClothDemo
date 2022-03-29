@@ -153,6 +153,8 @@ void Cloth::SatisfyConstraints()
         // This parallelization has a race condition for Rod constraints, since multiple threads could touch the same particle at the same time,
         // but in practice it just doesn't matter.
         std::for_each(std::execution::par_unseq, m_constraints.begin(), m_constraints.end(), [&](Constraint* const& cc) { cc->Apply(); });
+
+        std::for_each(std::execution::par_unseq, m_grabConstraints.begin(), m_grabConstraints.end(), [&](Constraint* const& cc) { cc->Apply(); });
     }
 }
 
@@ -215,7 +217,7 @@ void Cloth::CreateBoxes()
 
     // Create Inside Boxes
     float hxz = 35.f, hy = 30.0f;
-    Aabb box = {f3vec(-hxz, -hy, -hxz), f3vec(hxz, hy, hxz)};
+    Aabb box = {f3vec(-hxz, -25, -hxz), f3vec(hxz, hy, hxz)};
     m_collisionBoxes.emplace_back(box);
 
     // Create Outside Boxes
@@ -235,6 +237,23 @@ void Cloth::MoveColliders(const f3vec& delta)
     }
 }
 
+void Cloth::GrabParticles(const f3vec& pt)
+{
+    for (auto p : m_grabConstraints) delete p;
+    m_grabConstraints.clear();
+
+    for (size_t i = 0; i < m_pos.size(); i++) {
+        f3vec& p = m_pos[i];
+        if ((p - pt).length() < restDDiag) m_grabConstraints.emplace_back(new PointConstraint(&p, p));
+    }
+}
+
+void Cloth::UngrabParticles()
+{
+    for (auto p : m_grabConstraints) delete p;
+    m_grabConstraints.clear();
+}
+
 // Add up forces, advance system, satisfy constraints
 void Cloth::TimeStep()
 {
@@ -242,6 +261,11 @@ void Cloth::TimeStep()
     AccumulateForces();
     VerletIntegration();
     SatisfyConstraints();
+}
+
+void Cloth::MoveGrabbedParticles(const f3vec& delta)
+{
+    for (auto& c : m_grabConstraints) { c->setPos(c->getPos() + delta); }
 }
 
 void Cloth::Display(DrawMode drawMode)
