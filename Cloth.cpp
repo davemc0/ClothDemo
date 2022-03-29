@@ -147,7 +147,7 @@ void Cloth::SatisfyConstraints()
     for (int j = 0; j < m_constraintItersPerTimeStep; j++) {
         if (m_collisionObj == COLLIDE_SPHERES)
             CollisionWithSpheres();
-        else if (m_collisionObj == COLLIDE_BOXES)
+        else if (m_collisionObj == COLLIDE_BOXES || m_collisionObj == COLLIDE_INSIDE_BOXES)
             CollisionWithBoxes();
 
         // This parallelization has a race condition for Rod constraints, since multiple threads could touch the same particle at the same time,
@@ -180,11 +180,20 @@ void Cloth::CollisionWithSpheres()
 
 void Cloth::CollisionWithBoxes()
 {
-    // Collide each particle with each AABB
-    for (int i = 0; i < m_pos.size(); i++) {
-        for (size_t j = 0; j < m_collisionBoxes.size(); j++) {
-            // If the particle is inside the box push it to the nearest point outside the box
-            if (m_collisionBoxes[j].contains(m_pos[i])) m_pos[i] = m_collisionBoxes[j].nearestOnSurface(m_pos[i]);
+    bool checkInside = m_collisionObj == COLLIDE_INSIDE_BOXES;
+    // Collide each particle with each AABB and make sure the particle is on the proper side of the box
+    size_t st = 1, end = m_collisionBoxes.size();
+    if (checkInside) {
+        st = 0;
+        end = 1;
+    }
+
+    for (size_t j = st; j < end; j++) {
+        for (int i = 0; i < m_pos.size(); i++) {
+            // If forcing outside and the particle is inside the box push it to the nearest point on the box surface
+            if (m_collisionBoxes[j].contains(m_pos[i]) && !checkInside) m_pos[i] = m_collisionBoxes[j].nearestOnSurface(m_pos[i]);
+            // If forcing inside and the particle is outside the box push it to the nearest point on the box surface
+            if (!m_collisionBoxes[j].contains(m_pos[i]) && checkInside) m_pos[i] = m_collisionBoxes[j].nearest(m_pos[i]);
         }
     }
 }
@@ -202,10 +211,16 @@ void Cloth::CreateSpheres()
 
 void Cloth::CreateBoxes()
 {
-    float hxz = 15.f, hy = 10.0f;
-
     m_collisionBoxes.clear();
-    Aabb box(f3vec(-hxz, -hy, -hxz), f3vec(hxz, hy, hxz));
+
+    // Create Inside Boxes
+    float hxz = 35.f, hy = 30.0f;
+    Aabb box = {f3vec(-hxz, -hy, -hxz), f3vec(hxz, hy, hxz)};
+    m_collisionBoxes.emplace_back(box);
+
+    // Create Outside Boxes
+    hxz = 15.f, hy = 10.0f;
+    box = {f3vec(-hxz, -hy, -hxz), f3vec(hxz, hy, hxz)};
     m_collisionBoxes.emplace_back(box);
 }
 
@@ -214,7 +229,9 @@ void Cloth::MoveColliders(const f3vec& delta)
     if (m_collisionObj == COLLIDE_SPHERES)
         for (int i = 0; i < m_collisionSpheres.size(); i++) { m_collisionSpheres[i] = f4vec(f3vec(m_collisionSpheres[i]) + delta, m_collisionSpheres[i].w); }
     else if (m_collisionObj == COLLIDE_BOXES) {
-        for (int i = 0; i < m_collisionBoxes.size(); i++) { m_collisionBoxes[i] = m_collisionBoxes[i] + delta; }
+        for (int i = 1; i < m_collisionBoxes.size(); i++) { m_collisionBoxes[i] = m_collisionBoxes[i] + delta; }
+    } else if (m_collisionObj == COLLIDE_INSIDE_BOXES) {
+        for (int i = 0; i < 1; i++) { m_collisionBoxes[i] = m_collisionBoxes[i] + delta; }
     }
 }
 
@@ -294,9 +311,15 @@ void Cloth::Display(DrawMode drawMode)
             glutWireSphere(.99 * m_collisionSpheres[i].w, 20, 20);
             glPopMatrix();
         }
-    } else if (m_collisionObj == COLLIDE_BOXES) {
+    } else if (m_collisionObj == COLLIDE_BOXES || m_collisionObj == COLLIDE_INSIDE_BOXES) {
         // Draw boxes
-        for (size_t i = 0; i < m_collisionBoxes.size(); i++) {
+        size_t st = 1, end = m_collisionBoxes.size();
+        if (m_collisionObj == COLLIDE_INSIDE_BOXES) {
+            st = 0;
+            end = 1;
+        }
+
+        for (size_t i = st; i < end; i++) {
             Aabb box = m_collisionBoxes[i];
             glPushMatrix();
             glTranslatef(box.centroid().x, box.centroid().y, box.centroid().z);
