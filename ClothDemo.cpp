@@ -16,6 +16,7 @@
 // User Interface Globals
 bool paused = false, fullScreen = false;
 int WW = 1024, WH = 1024, constraintIters = 50; // If it runs slow reduce constraintIters first.
+int stiffening = 1;                             // If > 1, sdd stiffening constraints that span this many particles
 f3vec grabPtWorld, grabPtWin;                   // The point being dragged around by a mouse click and drag
 DrawMode drawMode = DRAW_TRIS;
 ClothStyle clothStyle = TABLECLOTH;
@@ -149,13 +150,21 @@ void userKeyboardFunc0(unsigned char Key, int x, int y)
             glutPositionWindow(0, 0);
         }
         break;
-    case '+':
+    case '-':
+        if (stiffening > 1) stiffening--;
+        std::cerr << "stiffening: " << stiffening << '\n';
+        pCloth->SetStiffening(stiffening, clothStyle);
+        break;
     case '=':
+        stiffening++;
+        std::cerr << "stiffening: " << stiffening << '\n';
+        pCloth->SetStiffening(stiffening, clothStyle);
+        break;
+    case '+':
         constraintIters++;
         std::cerr << "constraintIters: " << constraintIters << '\n';
         pCloth->SetConstraintIters(constraintIters);
         break;
-    case '-':
     case '_':
         constraintIters = max(constraintIters - 1, 0);
         std::cerr << "constraintIters: " << constraintIters << '\n';

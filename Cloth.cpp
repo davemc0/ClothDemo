@@ -60,53 +60,36 @@ void Cloth::Reset(ClothStyle clothStyle)
     }
 
     // Constraints to hold the cloth together
-    for (int j = 0; j < m_ny - 1; j++) {
-        for (int i = 0; i < m_nx - 1; i++) {
-            // Index points
-            // p1---p2
-            //  |    |
-            // p3---p4
-            f3vec* p1 = &m_pos[i + m_nx * j];
-            f3vec* p2 = &m_pos[i + 1 + m_nx * j];
-            f3vec* p3 = &m_pos[i + m_nx * (j + 1)];
-            f3vec* p4 = &m_pos[i + 1 + m_nx * (j + 1)];
-            m_constraints.push_back(new RodConstraint(p1, p2, m_restDX));  // Horizontal springs
-            m_constraints.push_back(new RodConstraint(p1, p4, restDDiag)); // Diagonal springs
-            m_constraints.push_back(new RodConstraint(p2, p3, restDDiag)); // Faster with only one diagonal but sags to the left
-            m_constraints.push_back(new RodConstraint(p1, p3, m_restDY));  // Vertical springs
+    for (int j = 0; j < m_ny; j++) {
+        for (int i = 0; i < m_nx; i++) {
+            f3vec* p1 = m_pos.data() + i + m_nx * j;           // Index point
+            f3vec* p2 = m_pos.data() + i + 1 + m_nx * j;       // P1---p2
+            f3vec* p3 = m_pos.data() + i + m_nx * (j + 1);     //  |    |
+            f3vec* p4 = m_pos.data() + i + 1 + m_nx * (j + 1); // P3---p4
+
+            if (i < m_nx - 1) m_constraints.push_back(new RodConstraint(p1, p2, m_restDX));                  // Horizontal springs
+            if (j < m_ny - 1) m_constraints.push_back(new RodConstraint(p1, p3, m_restDY));                  // Vertical springs
+            if (i < m_nx - 1 && j < m_ny - 1) m_constraints.push_back(new RodConstraint(p1, p4, restDDiag)); // Diagonal springs are faster with
+            if (i < m_nx - 1 && j < m_ny - 1) m_constraints.push_back(new RodConstraint(p2, p3, restDDiag)); // Only one but it sags to the left
         }
-    }
-    // Last row
-    for (int i = 0; i < m_nx - 1; i++) {
-        f3vec* p1 = &m_pos[i + m_nx * (m_ny - 1)];
-        f3vec* p2 = &m_pos[i + 1 + m_nx * (m_ny - 1)];
-        m_constraints.push_back(new RodConstraint(p1, p2, m_restDX));
-    }
-    // Last column
-    for (int j = 0; j < m_ny - 1; j++) {
-        f3vec* p1 = &m_pos[m_nx - 1 + j * m_nx];
-        f3vec* p2 = &m_pos[m_nx - 1 + (j + 1) * m_nx];
-        m_constraints.push_back(new RodConstraint(p1, p2, m_restDY));
     }
 
     // Stiffening constraints
-    const int ST = 10;
-    for (int j = 0; j < m_ny - ST; j++) {
-        for (int i = 0; i < m_nx - ST; i++) {
-            // Index points
-            // p1---p2
-            //  |    |
-            // p3---p4
-            f3vec* p1 = &m_pos[i + m_nx * j];
-            f3vec* p2 = &m_pos[i + ST + m_nx * j];
-            f3vec* p3 = &m_pos[i + m_nx * (j + ST)];
-            f3vec* p4 = &m_pos[i + ST + m_nx * (j + ST)];
-            m_constraints.push_back(new RodConstraint(p1, p2, m_restDX * ST));  // Horizontal springs
-            m_constraints.push_back(new RodConstraint(p1, p4, restDDiag * ST)); // Diagonal springs
-            m_constraints.push_back(new RodConstraint(p2, p3, restDDiag * ST)); // Faster with only one diagonal but sags to the left
-            m_constraints.push_back(new RodConstraint(p1, p3, m_restDY * ST));  // Vertical springs
+    const int ST = m_stiffening;
+    if (ST > 1)
+        for (int j = 0; j < m_ny; j++) {
+            for (int i = 0; i < m_nx; i++) {
+                f3vec* p1 = m_pos.data() + i + m_nx * j;           // Index point
+                f3vec* p2 = m_pos.data() + i + 1 + m_nx * j;       // P1---p2
+                f3vec* p3 = m_pos.data() + i + m_nx * (j + 1);     //  |    |
+                f3vec* p4 = m_pos.data() + i + 1 + m_nx * (j + 1); // P3---p4
+
+                if (i < m_nx - ST) m_constraints.push_back(new RodConstraint(p1, p2, m_restDX * ST));                   // Horizontal springs
+                if (j < m_ny - ST) m_constraints.push_back(new RodConstraint(p1, p3, m_restDY * ST));                   // Vertical springs
+                if (i < m_nx - ST && j < m_ny - ST) m_constraints.push_back(new RodConstraint(p1, p4, restDDiag * ST)); // Diagonal springs are faster with
+                if (i < m_nx - ST && j < m_ny - ST) m_constraints.push_back(new RodConstraint(p2, p3, restDDiag * ST)); // Only one but it sags to the left
+            }
         }
-    }
 
     // Constraints for curtain-like behavior
     if (clothStyle == CURTAIN) {
@@ -168,6 +151,8 @@ void Cloth::SatisfyConstraints()
         else if (m_collisionObj == COLLIDE_BOXES || m_collisionObj == COLLIDE_INSIDE_BOXES)
             CollisionWithBoxes();
 
+        for (int i = 0; i < m_constraints.size(); i++) std::swap(m_constraints[i], m_constraints[irand((int)m_constraints.size())]);
+
         // This parallelization has a race condition for Rod constraints, since multiple threads could touch the same particle at the same time,
         // but in practice it just doesn't matter.
         std::for_each(std::execution::par_unseq, m_constraints.begin(), m_constraints.end(), [&](Constraint* const& cc) { cc->Apply(); });
@@ -220,6 +205,11 @@ void Cloth::CollisionWithBoxes()
 
 void Cloth::SetCollideObjectType(CollisionObjects collObj) { m_collisionObj = collObj; }
 void Cloth::SetConstraintIters(int iters) { m_constraintItersPerTimeStep = iters; }
+void Cloth::SetStiffening(int stif, ClothStyle clothStyle)
+{
+    m_stiffening = stif;
+    Reset(clothStyle);
+}
 
 void Cloth::CreateSpheres()
 {

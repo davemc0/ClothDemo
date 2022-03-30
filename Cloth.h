@@ -24,6 +24,7 @@ public:
     void MoveColliders(const f3vec& delta);                 // Interact with cloth by moving collision objects
     void SetCollideObjectType(CollisionObjects collObj);    // What kind of objects to collide against
     void SetConstraintIters(int iters);                     // Set m_constraintItersPerTimeStep
+    void SetStiffening(int stif, ClothStyle clothStyle);    // Set stiffening constraint span width
     void WriteTriModel(const char* filename);               // Write current cloth mesh to geometry file
     void GrabParticles(const f3vec& nPt);                   // Grab particles on projective mouse click line
     void UngrabParticles();                                 // Ungrab particles on mouse-up
@@ -54,6 +55,7 @@ private:
     float m_damping;                                   // Damping constant to improve stability
     float m_timeStep;                                  // Time step
     int m_constraintItersPerTimeStep = 10;             // Iterating constraint satisfaction improves quality a lot
+    int m_stiffening = 1;                              // Add stiffening constraints that span this many particles
     CollisionObjects m_collisionObj = COLLIDE_SPHERES; // What kind of objects to collide against
     std::vector<f4vec> m_collisionSpheres;             // List of spheres to collide against
     std::vector<Aabb> m_collisionBoxes;                // List of boxes to collide against
