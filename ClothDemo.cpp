@@ -17,6 +17,7 @@
 bool paused = false, fullScreen = false;
 int WW = 1024, WH = 1024, constraintIters = 50; // If it runs slow reduce constraintIters first.
 int stiffening = 1;                             // If > 1, sdd stiffening constraints that span this many particles
+int nParticlesXY = 110;                         // Num particles in each dimension
 f3vec grabPtWorld, grabPtWin;                   // The point being dragged around by a mouse click and drag
 DrawMode drawMode = DRAW_TRIS;
 ClothStyle clothStyle = TABLECLOTH;
@@ -151,12 +152,14 @@ void userKeyboardFunc0(unsigned char Key, int x, int y)
         }
         break;
     case '-':
-        if (stiffening > 1) stiffening--;
+        stiffening--;
+        if (stiffening < 1) stiffening = nParticlesXY - 1;
         std::cerr << "stiffening: " << stiffening << '\n';
         pCloth->SetStiffening(stiffening, clothStyle);
         break;
     case '=':
         stiffening++;
+        if (stiffening >= nParticlesXY) stiffening = 1;
         std::cerr << "stiffening: " << stiffening << '\n';
         pCloth->SetStiffening(stiffening, clothStyle);
         break;
@@ -247,9 +250,8 @@ int main(int argc, char** argv)
     f3vec startPos(0, clothWid / 2, 0);
     float dt = 0.03f;
     float damping = 0.95f;
-    int numPart1D = 110;
-    float partStep = clothWid / numPart1D;
-    pCloth = new Cloth(numPart1D, numPart1D, partStep, partStep, startPos, dt, damping, clothStyle);
+    float partStep = clothWid / nParticlesXY;
+    pCloth = new Cloth(nParticlesXY, nParticlesXY, partStep, partStep, startPos, dt, damping, clothStyle);
     pCloth->SetCollideObjectType(collisionObjects);
     pCloth->SetConstraintIters(constraintIters);
 

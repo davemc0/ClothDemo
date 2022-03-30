@@ -79,10 +79,10 @@ void Cloth::Reset(ClothStyle clothStyle)
     if (ST > 1)
         for (int j = 0; j < m_ny; j++) {
             for (int i = 0; i < m_nx; i++) {
-                f3vec* p1 = m_pos.data() + i + m_nx * j;           // Index point
-                f3vec* p2 = m_pos.data() + i + 1 + m_nx * j;       // P1---p2
-                f3vec* p3 = m_pos.data() + i + m_nx * (j + 1);     //  |    |
-                f3vec* p4 = m_pos.data() + i + 1 + m_nx * (j + 1); // P3---p4
+                f3vec* p1 = m_pos.data() + i + m_nx * j;             // Index point
+                f3vec* p2 = m_pos.data() + i + ST + m_nx * j;        // P1---p2
+                f3vec* p3 = m_pos.data() + i + m_nx * (j + ST);      //  |    |
+                f3vec* p4 = m_pos.data() + i + ST + m_nx * (j + ST); // P3---p4
 
                 if (i < m_nx - ST) m_constraints.push_back(new RodConstraint(p1, p2, m_restDX * ST));                   // Horizontal springs
                 if (j < m_ny - ST) m_constraints.push_back(new RodConstraint(p1, p3, m_restDY * ST));                   // Vertical springs
@@ -150,8 +150,6 @@ void Cloth::SatisfyConstraints()
             CollisionWithSpheres();
         else if (m_collisionObj == COLLIDE_BOXES || m_collisionObj == COLLIDE_INSIDE_BOXES)
             CollisionWithBoxes();
-
-        for (int i = 0; i < m_constraints.size(); i++) std::swap(m_constraints[i], m_constraints[irand((int)m_constraints.size())]);
 
         // This parallelization has a race condition for Rod constraints, since multiple threads could touch the same particle at the same time,
         // but in practice it just doesn't matter.
