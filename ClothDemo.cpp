@@ -40,7 +40,7 @@ f3vec unproject(f3vec winPt)
     bool ok = gluUnProject(winPt.x, winPt.y, winPt.z, modelmat, projmat, viewport, &worldPt.x, &worldPt.y, &worldPt.z);
     ASSERT_R(ok);
 
-    return f3vec(worldPt.x, worldPt.y, worldPt.z);
+    return f3vec(worldPt);
 }
 
 void userReshapeFunc0(int w, int h)

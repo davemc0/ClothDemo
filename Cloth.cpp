@@ -304,7 +304,7 @@ void Cloth::Display(DrawMode drawMode)
 
         for (int i = 0; i < m_numTris; i++) {
             f3vec &a = m_pos[m_triInds[i][0]], &b = m_pos[m_triInds[i][1]], &c = m_pos[m_triInds[i][2]];
-            f3vec n1 = Cross((c - b), (a - b));
+            f3vec n1 = cross((c - b), (a - b));
             n1.normalize();
             m_normals[m_triInds[i][0]] = n1; // Computing facet normals but using them as vertex normals because glDrawElements requires vertex normals
             m_normals[m_triInds[i][1]] = n1; // Most normals get written to three times, but no big deal.
