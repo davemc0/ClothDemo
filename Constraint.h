@@ -57,7 +57,7 @@ inline void RodConstraint::Apply() const
     float halfDiff = 0.5f * (deltaLen - m_restLen) / deltaLen;
 #else
     // Faster because no sqrt, but a bit less accurate
-    float halfDiff = -(m_restLenSqr / (dot(delta, delta) + m_restLenSqr) - 0.5f);
+    float halfDiff = -(m_restLenSqr / (delta.lenSqr() + m_restLenSqr) - 0.5f);
 #endif
     delta *= halfDiff;
     *m_pA += delta;
